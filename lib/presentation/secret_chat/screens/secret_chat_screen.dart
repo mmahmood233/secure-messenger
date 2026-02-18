@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:timeago/timeago.dart' as timeago;
 import 'package:secure_messenger/core/constants/app_constants.dart';
 import 'package:secure_messenger/core/services/encryption_service.dart';
 import 'package:secure_messenger/core/theme/app_theme.dart';
@@ -40,14 +41,28 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
     );
     final uid = context.read<AuthProvider>().currentUser!.uid;
     _messageProvider.initChat(widget.chat.id, uid);
-    _messageProvider.addListener(_scrollToBottom);
+    _messageProvider.addListener(_onProviderUpdate);
+  }
+
+  void _onProviderUpdate() {
+    _scrollToBottom();
+    if (_messageProvider.errorMessage != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_messageProvider.errorMessage!),
+          backgroundColor: AppTheme.errorColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      _messageProvider.clearError();
+    }
   }
 
   @override
   void dispose() {
     final uid = context.read<AuthProvider>().currentUser?.uid ?? '';
     _messageProvider.stopListening(widget.chat.id, uid);
-    _messageProvider.removeListener(_scrollToBottom);
+    _messageProvider.removeListener(_onProviderUpdate);
     _messageProvider.dispose();
     _messageController.dispose();
     _scrollController.dispose();
@@ -229,9 +244,13 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
                         const Icon(Icons.lock, size: 14, color: AppTheme.secretChatColor),
                       ],
                     ),
-                    const Text(
-                      'Secret Chat · End-to-End Encrypted',
-                      style: TextStyle(fontSize: 11, color: AppTheme.secretChatColor),
+                    Text(
+                      user.isOnline
+                          ? 'Online · E2E Encrypted'
+                          : user.lastSeen != null
+                              ? 'last seen ${timeago.format(user.lastSeen!)} · 🔒'
+                              : 'Secret Chat · E2E Encrypted',
+                      style: const TextStyle(fontSize: 11, color: AppTheme.secretChatColor),
                     ),
                   ],
                 ),

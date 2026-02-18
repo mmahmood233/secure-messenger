@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:timeago/timeago.dart' as timeago;
 import 'package:secure_messenger/core/constants/app_constants.dart';
 import 'package:secure_messenger/core/theme/app_theme.dart';
 import 'package:secure_messenger/data/models/chat_model.dart';
@@ -35,14 +36,28 @@ class _ChatScreenState extends State<ChatScreen> {
     _messageProvider = MessageProvider(context.read());
     final uid = context.read<AuthProvider>().currentUser!.uid;
     _messageProvider.startListening(widget.chat.id, uid);
-    _messageProvider.addListener(_scrollToBottom);
+    _messageProvider.addListener(_onProviderUpdate);
+  }
+
+  void _onProviderUpdate() {
+    _scrollToBottom();
+    if (_messageProvider.errorMessage != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_messageProvider.errorMessage!),
+          backgroundColor: AppTheme.errorColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      _messageProvider.clearError();
+    }
   }
 
   @override
   void dispose() {
     final uid = context.read<AuthProvider>().currentUser?.uid ?? '';
     _messageProvider.stopListening(widget.chat.id, uid);
-    _messageProvider.removeListener(_scrollToBottom);
+    _messageProvider.removeListener(_onProviderUpdate);
     _messageProvider.dispose();
     _messageController.dispose();
     _scrollController.dispose();
@@ -218,7 +233,11 @@ class _ChatScreenState extends State<ChatScreen> {
                     Text(user.displayName,
                         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                     Text(
-                      user.isOnline ? 'Online' : 'Offline',
+                      user.isOnline
+                          ? 'Online'
+                          : user.lastSeen != null
+                              ? 'last seen ${timeago.format(user.lastSeen!)}'
+                              : 'Offline',
                       style: TextStyle(
                         fontSize: 12,
                         color: user.isOnline ? AppTheme.secondaryColor : AppTheme.subtitleColor,
