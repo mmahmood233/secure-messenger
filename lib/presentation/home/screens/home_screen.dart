@@ -1,8 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import 'package:secure_messenger/core/constants/app_constants.dart';
+import 'package:secure_messenger/core/utils/date_formatter.dart';
 import 'package:secure_messenger/core/theme/app_theme.dart';
 import 'package:secure_messenger/data/models/chat_model.dart';
 import 'package:secure_messenger/data/models/user_model.dart';
@@ -346,12 +346,5 @@ class _ChatTile extends StatelessWidget {
     );
   }
 
-  String _formatTime(DateTime time) {
-    final now = DateTime.now();
-    final diff = now.difference(time);
-    if (diff.inDays == 0) return DateFormat('HH:mm').format(time);
-    if (diff.inDays == 1) return 'Yesterday';
-    if (diff.inDays < 7) return DateFormat('EEE').format(time);
-    return DateFormat('dd/MM').format(time);
-  }
+  String _formatTime(DateTime time) => DateFormatter.formatMessageTime(time);
 }
