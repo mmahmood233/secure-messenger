@@ -7,6 +7,7 @@ import 'package:secure_messenger/data/repositories/chat_repository.dart';
 import 'package:secure_messenger/presentation/auth/providers/auth_provider.dart';
 import 'package:secure_messenger/presentation/chat/screens/chat_screen.dart';
 import 'package:secure_messenger/presentation/contacts/providers/contacts_provider.dart';
+import 'package:secure_messenger/presentation/profile/screens/view_profile_screen.dart';
 import 'package:secure_messenger/presentation/secret_chat/screens/secret_chat_screen.dart';
 import 'package:secure_messenger/presentation/widgets/user_avatar.dart';
 
@@ -156,6 +157,12 @@ class _ContactTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       onTap: onTap,
+      onLongPress: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ViewProfileScreen(user: contact),
+        ),
+      ),
       leading: UserAvatar(
         photoUrl: contact.photoUrl,
         displayName: contact.displayName,
