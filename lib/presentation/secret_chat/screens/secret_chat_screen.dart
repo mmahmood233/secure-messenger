@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:secure_messenger/core/constants/app_constants.dart';
+import 'package:secure_messenger/core/utils/date_formatter.dart';
 import 'package:secure_messenger/core/services/encryption_service.dart';
 import 'package:secure_messenger/core/theme/app_theme.dart';
 import 'package:secure_messenger/data/models/chat_model.dart';
@@ -231,6 +232,27 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
     return _messageProvider.typingUsers.values.any((v) => v);
   }
 
+  List<Widget> _buildItemList(List<MessageModel> messages, bool showTyping, String currentUid) {
+    final items = <Widget>[];
+    DateTime? lastDate;
+    for (final msg in messages) {
+      final msgDate = DateTime(msg.timestamp.year, msg.timestamp.month, msg.timestamp.day);
+      if (lastDate == null || msgDate != lastDate) {
+        items.add(_SecretDateSeparator(
+          label: DateFormatter.formatDateSeparator(msg.timestamp),
+        ));
+        lastDate = msgDate;
+      }
+      items.add(_SecretMessageBubble(
+        message: msg,
+        isMe: msg.senderId == currentUid,
+        onLongPress: () => _showMessageOptions(msg, currentUid),
+      ));
+    }
+    if (showTyping) items.add(const _SecretTypingIndicator());
+    return items;
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUid = context.read<AuthProvider>().currentUser!.uid;
@@ -302,22 +324,12 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
               animation: _messageProvider,
               builder: (_, __) {
                 final messages = _messageProvider.messages;
+                final items = _buildItemList(messages, _isOtherUserTyping(), currentUid);
                 return ListView.builder(
                   controller: _scrollController,
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  itemCount: messages.length + (_isOtherUserTyping() ? 1 : 0),
-                  itemBuilder: (_, i) {
-                    if (i == messages.length) {
-                      return const _SecretTypingIndicator();
-                    }
-                    final msg = messages[i];
-                    final isMe = msg.senderId == currentUid;
-                    return _SecretMessageBubble(
-                      message: msg,
-                      isMe: isMe,
-                      onLongPress: () => _showMessageOptions(msg, currentUid),
-                    );
-                  },
+                  itemCount: items.length,
+                  itemBuilder: (_, i) => items[i],
                 );
               },
             ),
@@ -516,6 +528,35 @@ class _SecretMediaContent extends StatelessWidget {
         child: const Center(
           child: Icon(Icons.play_circle_fill, color: Colors.white, size: 48),
         ),
+      ),
+    );
+  }
+}
+
+class _SecretDateSeparator extends StatelessWidget {
+  final String label;
+  const _SecretDateSeparator({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          const Expanded(child: Divider(color: AppTheme.dividerColor)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: AppTheme.subtitleColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const Expanded(child: Divider(color: AppTheme.dividerColor)),
+        ],
       ),
     );
   }
