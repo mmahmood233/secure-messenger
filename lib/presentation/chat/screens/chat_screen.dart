@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -102,6 +103,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _pickAndSendMedia(ImageSource source, String type) async {
+    final uid = context.read<AuthProvider>().currentUser!.uid;
     final picker = ImagePicker();
     XFile? picked;
     if (type == AppConstants.imageMessage) {
@@ -110,7 +112,6 @@ class _ChatScreenState extends State<ChatScreen> {
       picked = await picker.pickVideo(source: source);
     }
     if (picked == null) return;
-    final uid = context.read<AuthProvider>().currentUser!.uid;
     await _messageProvider.sendMediaMessage(
       chatId: widget.chat.id,
       senderId: uid,
@@ -164,7 +165,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _showMessageOptions(MessageModel message, String currentUid) {
-    if (message.senderId != currentUid || message.isDeleted) return;
+    if (message.isDeleted) return;
     showModalBottomSheet(
       context: context,
       backgroundColor: AppTheme.cardColor,
@@ -177,6 +178,22 @@ class _ChatScreenState extends State<ChatScreen> {
           children: [
             if (message.type == AppConstants.textMessage)
               ListTile(
+                leading: const Icon(Icons.copy_outlined, color: AppTheme.subtitleColor),
+                title: const Text('Copy Text', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(context);
+                  Clipboard.setData(ClipboardData(text: message.content));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Message copied'),
+                      behavior: SnackBarBehavior.floating,
+                      duration: Duration(seconds: 1),
+                    ),
+                  );
+                },
+              ),
+            if (message.senderId == currentUid && message.type == AppConstants.textMessage)
+              ListTile(
                 leading: const Icon(Icons.edit_outlined, color: AppTheme.primaryColor),
                 title: const Text('Edit Message', style: TextStyle(color: Colors.white)),
                 onTap: () {
@@ -187,17 +204,18 @@ class _ChatScreenState extends State<ChatScreen> {
                   });
                 },
               ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline, color: AppTheme.errorColor),
-              title: const Text('Delete Message', style: TextStyle(color: AppTheme.errorColor)),
-              onTap: () {
-                Navigator.pop(context);
-                _messageProvider.deleteMessage(
-                  chatId: widget.chat.id,
-                  messageId: message.id,
-                );
-              },
-            ),
+            if (message.senderId == currentUid)
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: AppTheme.errorColor),
+                title: const Text('Delete Message', style: TextStyle(color: AppTheme.errorColor)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _messageProvider.deleteMessage(
+                    chatId: widget.chat.id,
+                    messageId: message.id,
+                  );
+                },
+              ),
           ],
         ),
       ),
