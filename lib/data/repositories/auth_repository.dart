@@ -123,9 +123,9 @@ class AuthRepository {
     await _firestore
         .collection(AppConstants.usersCollection)
         .doc(uid)
-        .update({
+        .set({
       'isOnline': isOnline,
       'lastSeen': FieldValue.serverTimestamp(),
-    });
+    }, SetOptions(merge: true));
   }
 }
