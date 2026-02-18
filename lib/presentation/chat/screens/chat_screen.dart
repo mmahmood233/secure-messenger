@@ -354,7 +354,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 }
 
-class _MessageBubble extends StatelessWidget {
+class _MessageBubble extends StatefulWidget {
   final MessageModel message;
   final bool isMe;
   final VoidCallback onLongPress;
@@ -366,68 +366,95 @@ class _MessageBubble extends StatelessWidget {
   });
 
   @override
+  State<_MessageBubble> createState() => _MessageBubbleState();
+}
+
+class _MessageBubbleState extends State<_MessageBubble> {
+  bool _showTimestamp = false;
+
+  @override
   Widget build(BuildContext context) {
+    final message = widget.message;
+    final isMe = widget.isMe;
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
-        onLongPress: onLongPress,
-        child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 3),
-          constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.75,
-          ),
-          decoration: BoxDecoration(
-            color: isMe ? AppTheme.sentBubbleColor : AppTheme.receivedBubbleColor,
-            borderRadius: BorderRadius.only(
-              topLeft: const Radius.circular(18),
-              topRight: const Radius.circular(18),
-              bottomLeft: Radius.circular(isMe ? 18 : 4),
-              bottomRight: Radius.circular(isMe ? 4 : 18),
-            ),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              if (message.isDeleted)
-                const Text(
-                  'This message was deleted',
-                  style: TextStyle(
-                    color: AppTheme.subtitleColor,
-                    fontStyle: FontStyle.italic,
-                    fontSize: 14,
-                  ),
-                )
-              else if (message.type == AppConstants.imageMessage && message.mediaUrl != null)
-                _MediaContent(url: message.mediaUrl!, type: AppConstants.imageMessage)
-              else if (message.type == AppConstants.videoMessage && message.mediaUrl != null)
-                _MediaContent(url: message.mediaUrl!, type: AppConstants.videoMessage)
-              else
-                Text(
-                  message.content,
-                  style: const TextStyle(color: Colors.white, fontSize: 15),
+        onTap: () => setState(() => _showTimestamp = !_showTimestamp),
+        onLongPress: widget.onLongPress,
+        child: Column(
+          crossAxisAlignment:
+              isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 3),
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.75,
+              ),
+              decoration: BoxDecoration(
+                color: isMe
+                    ? AppTheme.sentBubbleColor
+                    : AppTheme.receivedBubbleColor,
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(18),
+                  topRight: const Radius.circular(18),
+                  bottomLeft: Radius.circular(isMe ? 18 : 4),
+                  bottomRight: Radius.circular(isMe ? 4 : 18),
                 ),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisSize: MainAxisSize.min,
+              ),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  if (message.isEdited && !message.isDeleted)
+                  if (message.isDeleted)
                     const Text(
-                      'edited · ',
-                      style: TextStyle(color: AppTheme.subtitleColor, fontSize: 10),
-                    ),
-                  Text(
-                    DateFormat('HH:mm').format(message.timestamp),
-                    style: const TextStyle(color: AppTheme.subtitleColor, fontSize: 11),
+                      'This message was deleted',
+                      style: TextStyle(
+                        color: AppTheme.subtitleColor,
+                        fontStyle: FontStyle.italic,
+                        fontSize: 14,
+                      ),
+                    )
+                  else if (message.type == AppConstants.textMessage)
+                    Text(
+                      message.content,
+                      style:
+                          const TextStyle(color: Colors.white, fontSize: 15),
+                    )
+                  else if (message.mediaUrl != null)
+                    _MediaContent(
+                        url: message.mediaUrl!, type: message.type),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        DateFormat('HH:mm').format(message.timestamp),
+                        style: const TextStyle(
+                            color: Colors.white70, fontSize: 11),
+                      ),
+                      if (isMe) ...[
+                        const SizedBox(width: 4),
+                        _StatusIcon(status: message.status),
+                      ],
+                    ],
                   ),
-                  if (isMe) ...[
-                    const SizedBox(width: 4),
-                    _StatusIcon(status: message.status),
-                  ],
                 ],
               ),
-            ],
-          ),
+            ),
+            if (_showTimestamp)
+              Padding(
+                padding: const EdgeInsets.only(
+                    top: 2, bottom: 4, left: 4, right: 4),
+                child: Text(
+                  DateFormatter.formatFullDate(message.timestamp),
+                  style: const TextStyle(
+                    color: AppTheme.subtitleColor,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
