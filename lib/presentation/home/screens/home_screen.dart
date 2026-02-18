@@ -11,6 +11,7 @@ import 'package:secure_messenger/presentation/auth/providers/auth_provider.dart'
 import 'package:secure_messenger/presentation/chat/providers/chat_provider.dart';
 import 'package:secure_messenger/presentation/chat/screens/chat_screen.dart';
 import 'package:secure_messenger/presentation/contacts/screens/contacts_screen.dart';
+import 'package:secure_messenger/presentation/contacts/screens/search_screen.dart';
 import 'package:secure_messenger/presentation/profile/screens/profile_screen.dart';
 import 'package:secure_messenger/presentation/secret_chat/screens/secret_chat_screen.dart';
 import 'package:secure_messenger/presentation/widgets/offline_banner.dart';
@@ -154,7 +155,7 @@ class _ChatsTab extends StatelessWidget {
               tooltip: 'Search users',
               onPressed: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const ContactsScreen()),
+                MaterialPageRoute(builder: (_) => const SearchScreen()),
               ),
             ),
             IconButton(
