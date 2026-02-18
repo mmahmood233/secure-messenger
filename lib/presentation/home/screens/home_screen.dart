@@ -150,7 +150,16 @@ class _ChatsTab extends StatelessWidget {
           ),
           actions: [
             IconButton(
+              icon: const Icon(Icons.search),
+              tooltip: 'Search users',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ContactsScreen()),
+              ),
+            ),
+            IconButton(
               icon: const Icon(Icons.edit_square),
+              tooltip: 'New chat',
               onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const ContactsScreen()),
