@@ -369,21 +369,25 @@ class _QrScannerScreenState extends State<_QrScannerScreen> {
           final uid = raw.replaceFirst('securemessenger://user/', '');
 
           final contacts = context.read<ContactsProvider>();
+          final auth = context.read<AuthProvider>();
+          final chatRepo = context.read<ChatRepository>();
           final user = await contacts.getUserByUid(uid);
 
           if (!mounted) return;
+          // ignore: use_build_context_synchronously
+          final ctx = context;
 
           if (user == null) {
-            ScaffoldMessenger.of(context).showSnackBar(
+            ScaffoldMessenger.of(ctx).showSnackBar(
               const SnackBar(content: Text('User not found')),
             );
             setState(() => _scanned = false);
             return;
           }
 
-          Navigator.pop(context);
+          Navigator.pop(ctx);
           showModalBottomSheet(
-            context: context,
+            context: ctx,
             backgroundColor: AppTheme.cardColor,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -391,14 +395,12 @@ class _QrScannerScreenState extends State<_QrScannerScreen> {
             builder: (_) => _AddContactSheet(
               user: user,
               onChat: () {
-                final auth = context.read<AuthProvider>();
-                final chatRepo = context.read<ChatRepository>();
                 chatRepo
                     .getOrCreateChat(auth.currentUser!.uid, user.uid)
                     .then((chat) {
-                  if (context.mounted) {
+                  if (ctx.mounted) {
                     Navigator.push(
-                      context,
+                      ctx,
                       MaterialPageRoute(
                         builder: (_) => ChatScreen(chat: chat, otherUser: user),
                       ),

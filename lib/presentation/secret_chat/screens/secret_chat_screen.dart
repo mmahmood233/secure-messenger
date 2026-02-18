@@ -107,6 +107,7 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
   }
 
   Future<void> _pickAndSendMedia(ImageSource source, String type) async {
+    final uid = context.read<AuthProvider>().currentUser!.uid;
     final picker = ImagePicker();
     XFile? picked;
     if (type == AppConstants.imageMessage) {
@@ -115,7 +116,6 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
       picked = await picker.pickVideo(source: source);
     }
     if (picked == null) return;
-    final uid = context.read<AuthProvider>().currentUser!.uid;
     await _messageProvider.sendMediaMessage(
       chatId: widget.chat.id,
       senderId: uid,
