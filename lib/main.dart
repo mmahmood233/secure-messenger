@@ -1,3 +1,4 @@
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
@@ -7,6 +8,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:provider/provider.dart';
 import 'package:secure_messenger/core/services/biometric_service.dart';
+import 'package:secure_messenger/core/services/connectivity_service.dart';
 import 'package:secure_messenger/core/services/encryption_service.dart';
 import 'package:secure_messenger/core/theme/app_theme.dart';
 import 'package:secure_messenger/data/repositories/auth_repository.dart';
@@ -67,6 +69,9 @@ class SecureMessengerApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(
           create: (_) => ChatProvider(chatRepo),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => ConnectivityService(Connectivity()),
         ),
       ],
       child: MaterialApp(

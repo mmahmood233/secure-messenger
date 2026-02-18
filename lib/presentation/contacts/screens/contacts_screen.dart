@@ -7,6 +7,7 @@ import 'package:secure_messenger/data/repositories/chat_repository.dart';
 import 'package:secure_messenger/presentation/auth/providers/auth_provider.dart';
 import 'package:secure_messenger/presentation/chat/screens/chat_screen.dart';
 import 'package:secure_messenger/presentation/contacts/providers/contacts_provider.dart';
+import 'package:secure_messenger/presentation/secret_chat/screens/secret_chat_screen.dart';
 import 'package:secure_messenger/presentation/widgets/user_avatar.dart';
 
 class ContactsScreen extends StatefulWidget {
@@ -231,6 +232,23 @@ class _AddContactSheet extends StatelessWidget {
 
   const _AddContactSheet({required this.user, required this.onChat});
 
+  void _openSecretChat(BuildContext context) async {
+    final auth = context.read<AuthProvider>();
+    final chatRepo = context.read<ChatRepository>();
+    final chat = await chatRepo.getOrCreateChat(
+      auth.currentUser!.uid,
+      user.uid,
+      isSecret: true,
+    );
+    if (!context.mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SecretChatScreen(chat: chat, otherUser: user),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -292,6 +310,24 @@ class _AddContactSheet extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                _openSecretChat(context);
+              },
+              icon: const Icon(Icons.lock_outline, size: 18),
+              label: const Text('Start Secret Chat'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.secretChatColor,
+                side: const BorderSide(color: AppTheme.secretChatColor),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
           ),
         ],
       ),

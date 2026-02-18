@@ -1,6 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:secure_messenger/core/constants/app_constants.dart';
 import 'package:secure_messenger/core/theme/app_theme.dart';
 import 'package:secure_messenger/data/models/chat_model.dart';
 import 'package:secure_messenger/data/models/user_model.dart';
@@ -11,6 +13,7 @@ import 'package:secure_messenger/presentation/chat/screens/chat_screen.dart';
 import 'package:secure_messenger/presentation/contacts/screens/contacts_screen.dart';
 import 'package:secure_messenger/presentation/profile/screens/profile_screen.dart';
 import 'package:secure_messenger/presentation/secret_chat/screens/secret_chat_screen.dart';
+import 'package:secure_messenger/presentation/widgets/offline_banner.dart';
 import 'package:secure_messenger/presentation/widgets/user_avatar.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -20,7 +23,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _selectedIndex = 0;
 
   final List<Widget> _pages = const [
@@ -32,20 +35,63 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final uid = context.read<AuthProvider>().currentUser?.uid;
       if (uid != null) {
         context.read<ChatProvider>().startListening(uid);
+        _setOnlineStatus(uid, true);
       }
     });
   }
 
   @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final uid = context.read<AuthProvider>().currentUser?.uid;
+    if (uid == null) return;
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _setOnlineStatus(uid, true);
+        break;
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+      case AppLifecycleState.inactive:
+        _setOnlineStatus(uid, false);
+        break;
+      case AppLifecycleState.hidden:
+        break;
+    }
+  }
+
+  void _setOnlineStatus(String uid, bool isOnline) {
+    FirebaseFirestore.instance
+        .collection(AppConstants.usersCollection)
+        .doc(uid)
+        .update({
+      'isOnline': isOnline,
+      'lastSeen': FieldValue.serverTimestamp(),
+    }).catchError((_) {});
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: _pages,
+      body: Column(
+        children: [
+          const OfflineBanner(),
+          Expanded(
+            child: IndexedStack(
+              index: _selectedIndex,
+              children: _pages,
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
