@@ -171,19 +171,21 @@ class ChatRepository {
 
   Future<void> markMessagesAsRead(String chatId, String uid) async {
     try {
-      final unreadMessages = await _firestore
+      final snap = await _firestore
           .collection(AppConstants.chatsCollection)
           .doc(chatId)
           .collection(AppConstants.messagesCollection)
           .where('senderId', isNotEqualTo: uid)
-          .where('status', isEqualTo: AppConstants.statusSent)
           .get();
 
-      if (unreadMessages.docs.isEmpty) return;
+      if (snap.docs.isEmpty) return;
 
       final batch = _firestore.batch();
-      for (final doc in unreadMessages.docs) {
-        batch.update(doc.reference, {'status': AppConstants.statusRead});
+      for (final doc in snap.docs) {
+        final status = doc.data()['status'] as String? ?? AppConstants.statusSent;
+        if (status != AppConstants.statusRead) {
+          batch.update(doc.reference, {'status': AppConstants.statusRead});
+        }
       }
 
       batch.update(
@@ -192,9 +194,27 @@ class ChatRepository {
       );
 
       await batch.commit();
-    } catch (e) {
-      throw NetworkException('Failed to mark messages as read: $e');
-    }
+    } catch (_) {}
+  }
+
+  Future<void> markMessagesDelivered(String chatId, String uid) async {
+    try {
+      final snap = await _firestore
+          .collection(AppConstants.chatsCollection)
+          .doc(chatId)
+          .collection(AppConstants.messagesCollection)
+          .where('senderId', isNotEqualTo: uid)
+          .where('status', isEqualTo: AppConstants.statusSent)
+          .get();
+
+      if (snap.docs.isEmpty) return;
+
+      final batch = _firestore.batch();
+      for (final doc in snap.docs) {
+        batch.update(doc.reference, {'status': AppConstants.statusDelivered});
+      }
+      await batch.commit();
+    } catch (_) {}
   }
 
   Future<void> setTyping(String chatId, String uid, bool isTyping) async {

@@ -113,6 +113,7 @@ class MessageProvider extends ChangeNotifier {
       },
     );
 
+    _chatRepository.markMessagesDelivered(chatId, currentUid).catchError((_) {});
     _chatRepository.markMessagesAsRead(chatId, currentUid).catchError((_) {});
   }
 
