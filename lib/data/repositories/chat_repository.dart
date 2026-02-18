@@ -59,10 +59,13 @@ class ChatRepository {
         createdAt: DateTime.now(),
       );
 
+      final chatData = chat.toMap();
+      chatData['typing'] = {currentUid: false, otherUid: false};
+
       await _firestore
           .collection(AppConstants.chatsCollection)
           .doc(chatId)
-          .set(chat.toMap());
+          .set(chatData);
 
       return chat;
     } catch (e) {
