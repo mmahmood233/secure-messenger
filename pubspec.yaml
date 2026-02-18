@@ -1,0 +1,60 @@
+name: secure_messenger
+description: "A secure messaging app with end-to-end encryption, biometric auth, and Firebase backend."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # Firebase
+  firebase_core: ^3.6.0
+  firebase_auth: ^5.3.1
+  cloud_firestore: ^5.4.4
+  firebase_storage: ^12.3.2
+
+  # Auth & Security
+  local_auth: ^2.3.0
+  flutter_secure_storage: ^9.2.2
+  encrypt: ^5.0.3
+  pointycastle: ^3.9.1
+
+  # Media
+  image_picker: ^1.1.2
+  cached_network_image: ^3.4.1
+  video_player: ^2.9.1
+
+  # QR Code
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^5.2.3
+
+  # UI & UX
+  provider: ^6.1.2
+  intl: ^0.19.0
+  timeago: ^3.7.0
+  flutter_spinkit: ^5.2.1
+  photo_view: ^0.15.0
+  image_cropper: ^8.0.2
+
+  # Utils
+  uuid: ^4.5.1
+  path_provider: ^2.1.4
+  permission_handler: ^11.3.1
+  connectivity_plus: ^6.1.0
+  rxdart: ^0.28.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
