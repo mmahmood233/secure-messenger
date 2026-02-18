@@ -13,6 +13,7 @@ import 'package:secure_messenger/data/models/user_model.dart';
 import 'package:secure_messenger/data/repositories/user_repository.dart';
 import 'package:secure_messenger/presentation/auth/providers/auth_provider.dart';
 import 'package:secure_messenger/presentation/chat/providers/chat_provider.dart';
+import 'package:secure_messenger/core/utils/date_formatter.dart';
 import 'package:secure_messenger/presentation/widgets/image_viewer_screen.dart';
 import 'package:secure_messenger/presentation/widgets/user_avatar.dart';
 import 'package:secure_messenger/presentation/widgets/video_player_screen.dart';
@@ -226,6 +227,35 @@ class _ChatScreenState extends State<ChatScreen> {
     return _messageProvider.typingUsers.values.any((v) => v);
   }
 
+  List<Widget> _buildItemList(List<MessageModel> messages, bool showTyping) {
+    final items = <Widget>[];
+    DateTime? lastDate;
+    for (final msg in messages) {
+      final msgDate = DateTime(
+        msg.timestamp.year,
+        msg.timestamp.month,
+        msg.timestamp.day,
+      );
+      if (lastDate == null || msgDate != lastDate) {
+        items.add(_DateSeparator(
+          label: DateFormatter.formatDateSeparator(msg.timestamp),
+        ));
+        lastDate = msgDate;
+      }
+      final isMe = msg.senderId == context.read<AuthProvider>().currentUser!.uid;
+      items.add(_MessageBubble(
+        message: msg,
+        isMe: isMe,
+        onLongPress: () => _showMessageOptions(
+          msg,
+          context.read<AuthProvider>().currentUser!.uid,
+        ),
+      ));
+    }
+    if (showTyping) items.add(const _TypingIndicator());
+    return items;
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUid = context.read<AuthProvider>().currentUser!.uid;
@@ -277,22 +307,12 @@ class _ChatScreenState extends State<ChatScreen> {
               animation: _messageProvider,
               builder: (_, __) {
                 final messages = _messageProvider.messages;
+                final items = _buildItemList(messages, _isOtherUserTyping());
                 return ListView.builder(
                   controller: _scrollController,
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  itemCount: messages.length + (_isOtherUserTyping() ? 1 : 0),
-                  itemBuilder: (_, i) {
-                    if (i == messages.length) {
-                      return const _TypingIndicator();
-                    }
-                    final msg = messages[i];
-                    final isMe = msg.senderId == currentUid;
-                    return _MessageBubble(
-                      message: msg,
-                      isMe: isMe,
-                      onLongPress: () => _showMessageOptions(msg, currentUid),
-                    );
-                  },
+                  itemCount: items.length,
+                  itemBuilder: (_, i) => items[i],
                 );
               },
             ),
@@ -570,6 +590,35 @@ class _DotState extends State<_Dot> with SingleTickerProviderStateMixin {
           color: AppTheme.subtitleColor,
           shape: BoxShape.circle,
         ),
+      ),
+    );
+  }
+}
+
+class _DateSeparator extends StatelessWidget {
+  final String label;
+  const _DateSeparator({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          const Expanded(child: Divider(color: AppTheme.dividerColor)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: AppTheme.subtitleColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const Expanded(child: Divider(color: AppTheme.dividerColor)),
+        ],
       ),
     );
   }
