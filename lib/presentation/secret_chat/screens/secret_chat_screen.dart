@@ -14,7 +14,9 @@ import 'package:secure_messenger/data/repositories/chat_repository.dart';
 import 'package:secure_messenger/data/repositories/user_repository.dart';
 import 'package:secure_messenger/presentation/auth/providers/auth_provider.dart';
 import 'package:secure_messenger/presentation/secret_chat/providers/secret_chat_provider.dart';
+import 'package:secure_messenger/presentation/widgets/image_viewer_screen.dart';
 import 'package:secure_messenger/presentation/widgets/user_avatar.dart';
+import 'package:secure_messenger/presentation/widgets/video_player_screen.dart';
 
 class SecretChatScreen extends StatefulWidget {
   final ChatModel chat;
@@ -448,31 +450,44 @@ class _SecretMediaContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (type == AppConstants.imageMessage) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: Image.network(
-          url,
-          width: 200,
-          height: 200,
-          fit: BoxFit.cover,
-          loadingBuilder: (_, child, progress) {
-            if (progress == null) return child;
-            return const SizedBox(
+      return GestureDetector(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ImageViewerScreen(imageUrl: url, heroTag: 'secret_$url'),
+          ),
+        ),
+        child: Hero(
+          tag: 'secret_$url',
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.network(
+              url,
               width: 200,
               height: 200,
-              child: Center(child: CircularProgressIndicator()),
-            );
-          },
-          errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.white),
+              fit: BoxFit.cover,
+              loadingBuilder: (_, child, progress) {
+                if (progress == null) return child;
+                return const SizedBox(
+                  width: 200,
+                  height: 200,
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              },
+              errorBuilder: (_, __, ___) =>
+                  const Icon(Icons.broken_image, color: Colors.white),
+            ),
+          ),
         ),
       );
     }
     return GestureDetector(
-      onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Opening video...')),
-        );
-      },
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => VideoPlayerScreen(videoUrl: url),
+        ),
+      ),
       child: Container(
         width: 200,
         height: 120,
