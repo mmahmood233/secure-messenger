@@ -1,12 +1,9 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:secure_messenger/core/services/biometric_service.dart';
 import 'package:secure_messenger/core/services/connectivity_service.dart';
 import 'package:secure_messenger/core/services/encryption_service.dart';
@@ -14,18 +11,19 @@ import 'package:secure_messenger/core/theme/app_theme.dart';
 import 'package:secure_messenger/data/repositories/auth_repository.dart';
 import 'package:secure_messenger/data/repositories/chat_repository.dart';
 import 'package:secure_messenger/data/repositories/user_repository.dart';
-import 'package:secure_messenger/firebase_options.dart';
 import 'package:secure_messenger/presentation/auth/providers/auth_provider.dart';
 import 'package:secure_messenger/presentation/auth/screens/login_screen.dart';
 import 'package:secure_messenger/presentation/chat/providers/chat_provider.dart';
 import 'package:secure_messenger/presentation/contacts/providers/contacts_provider.dart';
 import 'package:secure_messenger/presentation/home/screens/home_screen.dart';
 import 'package:secure_messenger/presentation/profile/providers/profile_provider.dart';
+import 'package:secure_messenger/supabase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
+  await Supabase.initialize(
+    url: SupabaseOptions.url,
+    anonKey: SupabaseOptions.anonKey,
   );
   runApp(const SecureMessengerApp());
 }
@@ -41,14 +39,13 @@ class SecureMessengerApp extends StatelessWidget {
     );
 
     final encryptionService = EncryptionService(secureStorage);
-    final biometricService = BiometricService(LocalAuthentication(), secureStorage);
-    final firestore = FirebaseFirestore.instance;
-    final storage = FirebaseStorage.instance;
-    final auth = FirebaseAuth.instance;
+    final biometricService =
+        BiometricService(LocalAuthentication(), secureStorage);
+    final supabase = Supabase.instance.client;
 
-    final authRepo = AuthRepository(auth, firestore);
-    final userRepo = UserRepository(firestore, storage);
-    final chatRepo = ChatRepository(firestore, storage);
+    final authRepo = AuthRepository(supabase, encryptionService);
+    final userRepo = UserRepository(supabase);
+    final chatRepo = ChatRepository(supabase);
 
     return MultiProvider(
       providers: [
@@ -98,6 +95,8 @@ class _AppRouter extends StatelessWidget {
             return const _SplashScreen();
           case AuthStatus.authenticated:
             return const HomeScreen();
+          case AuthStatus.biometricLocked:
+            return const LoginScreen();
           case AuthStatus.unauthenticated:
           case AuthStatus.error:
             return const LoginScreen();

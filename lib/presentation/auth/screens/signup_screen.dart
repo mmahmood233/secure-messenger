@@ -152,11 +152,13 @@ class _SignupScreenState extends State<SignupScreen> {
                               : Icons.visibility_off_outlined,
                           color: AppTheme.subtitleColor,
                         ),
-                        onPressed: () =>
-                            setState(() => _obscurePassword = !_obscurePassword),
+                        onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword),
                       ),
                       validator: (v) {
-                        if (v == null || v.isEmpty) return 'Password is required';
+                        if (v == null || v.isEmpty) {
+                          return 'Password is required';
+                        }
                         if (v.length < 6) {
                           return 'Password must be at least 6 characters';
                         }

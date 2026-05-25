@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class UserModel {
   final String uid;
   final String email;
@@ -8,6 +6,7 @@ class UserModel {
   final String? photoUrl;
   final String? bio;
   final String? phoneNumber;
+  final String? publicKey;
   final bool isOnline;
   final DateTime? lastSeen;
   final DateTime createdAt;
@@ -20,6 +19,7 @@ class UserModel {
     this.photoUrl,
     this.bio,
     this.phoneNumber,
+    this.publicKey,
     this.isOnline = false,
     this.lastSeen,
     required this.createdAt,
@@ -30,35 +30,35 @@ class UserModel {
       uid: uid,
       email: map['email'] ?? '',
       username: map['username'] ?? '',
-      displayName: map['displayName'] ?? '',
-      photoUrl: map['photoUrl'],
+      displayName: map['displayName'] ?? map['display_name'] ?? '',
+      photoUrl: map['photoUrl'] ?? map['photo_url'],
       bio: map['bio'],
-      phoneNumber: map['phoneNumber'],
-      isOnline: map['isOnline'] ?? false,
-      lastSeen: map['lastSeen'] != null
-          ? (map['lastSeen'] as Timestamp).toDate()
-          : null,
-      createdAt: map['createdAt'] != null
-          ? (map['createdAt'] as Timestamp).toDate()
-          : DateTime.now(),
+      phoneNumber: map['phoneNumber'] ?? map['phone_number'],
+      publicKey: map['publicKey'] ?? map['public_key'],
+      isOnline: map['isOnline'] ?? map['is_online'] ?? false,
+      lastSeen: _parseDate(map['lastSeen'] ?? map['last_seen']),
+      createdAt:
+          _parseDate(map['createdAt'] ?? map['created_at']) ?? DateTime.now(),
     );
   }
 
-  factory UserModel.fromDoc(DocumentSnapshot doc) {
-    return UserModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+  factory UserModel.fromSupabase(Map<String, dynamic> map) {
+    return UserModel.fromMap(map, map['id'] ?? map['uid'] ?? '');
   }
 
   Map<String, dynamic> toMap() {
     return {
+      'id': uid,
       'email': email,
       'username': username,
-      'displayName': displayName,
-      'photoUrl': photoUrl,
+      'display_name': displayName,
+      'photo_url': photoUrl,
       'bio': bio,
-      'phoneNumber': phoneNumber,
-      'isOnline': isOnline,
-      'lastSeen': lastSeen != null ? Timestamp.fromDate(lastSeen!) : null,
-      'createdAt': Timestamp.fromDate(createdAt),
+      'phone_number': phoneNumber,
+      'public_key': publicKey,
+      'is_online': isOnline,
+      'last_seen': lastSeen?.toIso8601String(),
+      'created_at': createdAt.toIso8601String(),
     };
   }
 
@@ -70,6 +70,7 @@ class UserModel {
     String? photoUrl,
     String? bio,
     String? phoneNumber,
+    String? publicKey,
     bool? isOnline,
     DateTime? lastSeen,
     DateTime? createdAt,
@@ -82,9 +83,17 @@ class UserModel {
       photoUrl: photoUrl ?? this.photoUrl,
       bio: bio ?? this.bio,
       phoneNumber: phoneNumber ?? this.phoneNumber,
+      publicKey: publicKey ?? this.publicKey,
       isOnline: isOnline ?? this.isOnline,
       lastSeen: lastSeen ?? this.lastSeen,
       createdAt: createdAt ?? this.createdAt,
     );
+  }
+
+  static DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value)?.toLocal();
+    return null;
   }
 }

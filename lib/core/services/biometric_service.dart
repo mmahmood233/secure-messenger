@@ -42,6 +42,35 @@ class BiometricService {
     }
   }
 
+  Future<void> storeCredentials({
+    required String email,
+    required String password,
+  }) async {
+    await _secureStorage.write(
+      key: AppConstants.biometricEmailKey,
+      value: email,
+    );
+    await _secureStorage.write(
+      key: AppConstants.biometricPasswordKey,
+      value: password,
+    );
+  }
+
+  Future<Map<String, String>?> getStoredCredentials() async {
+    final email =
+        await _secureStorage.read(key: AppConstants.biometricEmailKey);
+    final password = await _secureStorage.read(
+      key: AppConstants.biometricPasswordKey,
+    );
+    if (email == null || password == null) return null;
+    return {'email': email, 'password': password};
+  }
+
+  Future<void> clearStoredCredentials() async {
+    await _secureStorage.delete(key: AppConstants.biometricEmailKey);
+    await _secureStorage.delete(key: AppConstants.biometricPasswordKey);
+  }
+
   Future<bool> isBiometricEnabled() async {
     final value = await _secureStorage.read(
       key: AppConstants.biometricEnabledKey,
@@ -54,5 +83,8 @@ class BiometricService {
       key: AppConstants.biometricEnabledKey,
       value: enabled.toString(),
     );
+    if (!enabled) {
+      await clearStoredCredentials();
+    }
   }
 }

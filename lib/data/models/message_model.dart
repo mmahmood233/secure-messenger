@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:secure_messenger/core/constants/app_constants.dart';
 
 class MessageModel {
@@ -29,35 +28,34 @@ class MessageModel {
   factory MessageModel.fromMap(Map<String, dynamic> map, String id) {
     return MessageModel(
       id: id,
-      senderId: map['senderId'] ?? '',
+      senderId: map['senderId'] ?? map['sender_id'] ?? '',
       content: map['content'] ?? '',
       type: map['type'] ?? AppConstants.textMessage,
       status: map['status'] ?? AppConstants.statusSent,
-      timestamp: map['timestamp'] != null
-          ? (map['timestamp'] as Timestamp).toDate()
-          : DateTime.now(),
-      isEdited: map['isEdited'] ?? false,
-      isDeleted: map['isDeleted'] ?? false,
-      mediaUrl: map['mediaUrl'],
-      thumbnailUrl: map['thumbnailUrl'],
+      timestamp: _parseDate(map['timestamp']) ?? DateTime.now(),
+      isEdited: map['isEdited'] ?? map['is_edited'] ?? false,
+      isDeleted: map['isDeleted'] ?? map['is_deleted'] ?? false,
+      mediaUrl: map['mediaUrl'] ?? map['media_url'],
+      thumbnailUrl: map['thumbnailUrl'] ?? map['thumbnail_url'],
     );
   }
 
-  factory MessageModel.fromDoc(DocumentSnapshot doc) {
-    return MessageModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+  factory MessageModel.fromSupabase(Map<String, dynamic> map) {
+    return MessageModel.fromMap(map, map['id'] ?? '');
   }
 
   Map<String, dynamic> toMap() {
     return {
-      'senderId': senderId,
+      'id': id,
+      'sender_id': senderId,
       'content': content,
       'type': type,
       'status': status,
-      'timestamp': Timestamp.fromDate(timestamp),
-      'isEdited': isEdited,
-      'isDeleted': isDeleted,
-      'mediaUrl': mediaUrl,
-      'thumbnailUrl': thumbnailUrl,
+      'timestamp': timestamp.toIso8601String(),
+      'is_edited': isEdited,
+      'is_deleted': isDeleted,
+      'media_url': mediaUrl,
+      'thumbnail_url': thumbnailUrl,
     };
   }
 
@@ -85,5 +83,12 @@ class MessageModel {
       mediaUrl: mediaUrl ?? this.mediaUrl,
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
     );
+  }
+
+  static DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value)?.toLocal();
+    return null;
   }
 }

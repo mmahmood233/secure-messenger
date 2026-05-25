@@ -167,8 +167,7 @@ class _ViewProfileScreenState extends State<ViewProfileScreen> {
                   label: 'Add Contact',
                   onTap: _addContact,
                 ),
-              if (!_checkingContact && !_isContact)
-                const SizedBox(height: 12),
+              if (!_checkingContact && !_isContact) const SizedBox(height: 12),
               _ActionButton(
                 icon: Icons.chat_bubble_outline,
                 label: 'Send Message',
@@ -217,8 +216,7 @@ class _ActionButton extends StatelessWidget {
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           padding: const EdgeInsets.symmetric(vertical: 14),
-          textStyle:
-              const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
         ),
       ),
     );

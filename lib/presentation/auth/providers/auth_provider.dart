@@ -4,7 +4,14 @@ import 'package:secure_messenger/core/services/biometric_service.dart';
 import 'package:secure_messenger/data/models/user_model.dart';
 import 'package:secure_messenger/data/repositories/auth_repository.dart';
 
-enum AuthStatus { initial, loading, authenticated, unauthenticated, error }
+enum AuthStatus {
+  initial,
+  loading,
+  authenticated,
+  biometricLocked,
+  unauthenticated,
+  error,
+}
 
 class AuthProvider extends ChangeNotifier {
   final AuthRepository _authRepository;
@@ -15,6 +22,7 @@ class AuthProvider extends ChangeNotifier {
   String? _errorMessage;
   bool _biometricAvailable = false;
   bool _biometricEnabled = false;
+  bool _biometricUnlockInProgress = false;
 
   AuthStatus get status => _status;
   UserModel? get currentUser => _currentUser;
@@ -31,14 +39,22 @@ class AuthProvider extends ChangeNotifier {
     _biometricAvailable = await _biometricService.isAvailable();
     _biometricEnabled = await _biometricService.isBiometricEnabled();
 
-    _authRepository.authStateChanges.listen((user) async {
-      if (user != null) {
+    _authRepository.authStateChanges.listen((state) async {
+      if (state.session?.user != null) {
         _currentUser = await _authRepository.getCurrentUserProfile();
-        _status = AuthStatus.authenticated;
+        if (_currentUser == null) {
+          _status = AuthStatus.error;
+          _errorMessage = 'User profile not found. Please sign in again.';
+        } else {
+          _status = _biometricEnabled && !_biometricUnlockInProgress
+              ? AuthStatus.biometricLocked
+              : AuthStatus.authenticated;
+        }
       } else {
         _currentUser = null;
         _status = AuthStatus.unauthenticated;
       }
+      _biometricUnlockInProgress = false;
       notifyListeners();
     });
   }
@@ -76,7 +92,15 @@ class AuthProvider extends ChangeNotifier {
         email: email,
         password: password,
       );
-      _status = AuthStatus.authenticated;
+      if (_biometricEnabled) {
+        await _biometricService.storeCredentials(
+          email: email,
+          password: password,
+        );
+        _status = AuthStatus.biometricLocked;
+      } else {
+        _status = AuthStatus.authenticated;
+      }
       notifyListeners();
       return true;
     } on AppException catch (e) {
@@ -87,8 +111,29 @@ class AuthProvider extends ChangeNotifier {
 
   Future<bool> authenticateWithBiometric() async {
     try {
-      return await _biometricService.authenticate();
+      if (!_biometricEnabled) return false;
+      final didAuthenticate = await _biometricService.authenticate();
+      if (!didAuthenticate) return false;
+
+      if (_currentUser != null) {
+        _status = AuthStatus.authenticated;
+        notifyListeners();
+        return true;
+      }
+
+      final credentials = await _biometricService.getStoredCredentials();
+      if (credentials == null) return false;
+      _setLoading();
+      _biometricUnlockInProgress = true;
+      _currentUser = await _authRepository.signIn(
+        email: credentials['email']!,
+        password: credentials['password']!,
+      );
+      _status = AuthStatus.authenticated;
+      notifyListeners();
+      return true;
     } catch (_) {
+      _biometricUnlockInProgress = false;
       return false;
     }
   }
@@ -105,9 +150,42 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> toggleBiometric(bool enabled) async {
-    await _biometricService.setBiometricEnabled(enabled);
-    _biometricEnabled = enabled;
+  Future<bool> enableBiometricLogin(String password) async {
+    final email = _currentUser?.email;
+    if (email == null || email.isEmpty) {
+      _setError('Current user email is unavailable.');
+      return false;
+    }
+    if (!_biometricAvailable) {
+      _setError('Biometric authentication is not available on this device.');
+      return false;
+    }
+    try {
+      final didAuthenticate = await _biometricService.authenticate();
+      if (!didAuthenticate) {
+        _setError('Biometric authentication failed.');
+        return false;
+      }
+      await _authRepository.signIn(email: email, password: password);
+      await _biometricService.storeCredentials(
+          email: email, password: password);
+      await _biometricService.setBiometricEnabled(true);
+      _biometricEnabled = true;
+      _status = AuthStatus.authenticated;
+      notifyListeners();
+      return true;
+    } on AppException catch (e) {
+      _setError(e.message);
+      return false;
+    }
+  }
+
+  Future<void> disableBiometricLogin() async {
+    await _biometricService.setBiometricEnabled(false);
+    _biometricEnabled = false;
+    if (_status == AuthStatus.biometricLocked) {
+      _status = AuthStatus.authenticated;
+    }
     notifyListeners();
   }
 

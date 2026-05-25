@@ -1,48 +1,43 @@
 import 'dart:io';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:secure_messenger/core/constants/app_constants.dart';
+
+import 'package:supabase_flutter/supabase_flutter.dart' hide StorageException;
 import 'package:secure_messenger/core/errors/app_exception.dart';
 import 'package:secure_messenger/data/models/user_model.dart';
 
 class UserRepository {
-  final FirebaseFirestore _firestore;
-  final FirebaseStorage _storage;
+  final SupabaseClient _client;
 
-  UserRepository(this._firestore, this._storage);
+  UserRepository(this._client);
 
   Future<UserModel?> getUserById(String uid) async {
     try {
-      final doc = await _firestore
-          .collection(AppConstants.usersCollection)
-          .doc(uid)
-          .get();
-      if (!doc.exists) return null;
-      return UserModel.fromDoc(doc);
+      final data =
+          await _client.from('profiles').select().eq('id', uid).maybeSingle();
+      if (data == null) return null;
+      return UserModel.fromSupabase(data);
     } catch (e) {
       throw NetworkException('Failed to fetch user: $e');
     }
   }
 
   Stream<UserModel?> watchUser(String uid) {
-    return _firestore
-        .collection(AppConstants.usersCollection)
-        .doc(uid)
-        .snapshots()
-        .map((doc) => doc.exists ? UserModel.fromDoc(doc) : null);
+    return _client
+        .from('profiles')
+        .stream(primaryKey: ['id'])
+        .eq('id', uid)
+        .map(
+            (rows) => rows.isEmpty ? null : UserModel.fromSupabase(rows.first));
   }
 
   Future<List<UserModel>> searchUsers(String query) async {
     try {
       final lowerQuery = query.toLowerCase();
-      final snapshot = await _firestore
-          .collection(AppConstants.usersCollection)
-          .where('username', isGreaterThanOrEqualTo: lowerQuery)
-          .where('username', isLessThanOrEqualTo: '$lowerQuery\uf8ff')
-          .limit(20)
-          .get();
-
-      return snapshot.docs.map((doc) => UserModel.fromDoc(doc)).toList();
+      final rows = await _client
+          .from('profiles')
+          .select()
+          .ilike('username', '$lowerQuery%')
+          .limit(20);
+      return rows.map<UserModel>(UserModel.fromSupabase).toList();
     } catch (e) {
       throw NetworkException('Search failed: $e');
     }
@@ -50,13 +45,13 @@ class UserRepository {
 
   Future<UserModel?> getUserByUsername(String username) async {
     try {
-      final snapshot = await _firestore
-          .collection(AppConstants.usersCollection)
-          .where('username', isEqualTo: username.toLowerCase())
-          .limit(1)
-          .get();
-      if (snapshot.docs.isEmpty) return null;
-      return UserModel.fromDoc(snapshot.docs.first);
+      final data = await _client
+          .from('profiles')
+          .select()
+          .eq('username', username.toLowerCase())
+          .maybeSingle();
+      if (data == null) return null;
+      return UserModel.fromSupabase(data);
     } catch (e) {
       throw NetworkException('Failed to find user: $e');
     }
@@ -71,25 +66,22 @@ class UserRepository {
   }) async {
     try {
       final updates = <String, dynamic>{};
-      if (displayName != null) updates['displayName'] = displayName;
+      if (displayName != null) updates['display_name'] = displayName;
       if (bio != null) updates['bio'] = bio;
-      if (phoneNumber != null) updates['phoneNumber'] = phoneNumber;
+      if (phoneNumber != null) updates['phone_number'] = phoneNumber;
       if (username != null) {
-        final existing = await _firestore
-            .collection(AppConstants.usersCollection)
-            .where('username', isEqualTo: username.toLowerCase())
-            .limit(1)
-            .get();
-        if (existing.docs.isNotEmpty && existing.docs.first.id != uid) {
+        final existing = await _client
+            .from('profiles')
+            .select('id')
+            .eq('username', username.toLowerCase())
+            .maybeSingle();
+        if (existing != null && existing['id'] != uid) {
           throw const AppException('Username is already taken.');
         }
         updates['username'] = username.toLowerCase();
       }
       if (updates.isEmpty) return;
-      await _firestore
-          .collection(AppConstants.usersCollection)
-          .doc(uid)
-          .update(updates);
+      await _client.from('profiles').update(updates).eq('id', uid);
     } on AppException {
       rethrow;
     } catch (e) {
@@ -99,16 +91,17 @@ class UserRepository {
 
   Future<String> uploadProfilePhoto(String uid, File imageFile) async {
     try {
-      final ref = _storage.ref().child('profile_photos/$uid.jpg');
-      final uploadTask = await ref.putFile(
-        imageFile,
-        SettableMetadata(contentType: 'image/jpeg'),
-      );
-      final url = await uploadTask.ref.getDownloadURL();
-      await _firestore
-          .collection(AppConstants.usersCollection)
-          .doc(uid)
-          .update({'photoUrl': url});
+      final path = '$uid.jpg';
+      await _client.storage.from('profile-photos').upload(
+            path,
+            imageFile,
+            fileOptions: const FileOptions(
+              contentType: 'image/jpeg',
+              upsert: true,
+            ),
+          );
+      final url = _client.storage.from('profile-photos').getPublicUrl(path);
+      await _client.from('profiles').update({'photo_url': url}).eq('id', uid);
       return url;
     } catch (e) {
       throw StorageException('Failed to upload photo: $e');
@@ -117,19 +110,18 @@ class UserRepository {
 
   Future<List<UserModel>> getContacts(String uid) async {
     try {
-      final snapshot = await _firestore
-          .collection(AppConstants.usersCollection)
-          .doc(uid)
-          .collection(AppConstants.contactsCollection)
-          .get();
-
-      final contactIds = snapshot.docs.map((d) => d.id).toList();
-      if (contactIds.isEmpty) return [];
-
-      final users = await Future.wait(
-        contactIds.map((id) => getUserById(id)),
-      );
-      return users.whereType<UserModel>().toList();
+      final rows = await _client
+          .from('contacts')
+          .select('contact:profiles!contacts_contact_id_fkey(*)')
+          .eq('owner_id', uid);
+      return rows
+          .map<UserModel?>((row) {
+            final contact = row['contact'];
+            if (contact is! Map<String, dynamic>) return null;
+            return UserModel.fromSupabase(contact);
+          })
+          .whereType<UserModel>()
+          .toList();
     } catch (e) {
       throw NetworkException('Failed to load contacts: $e');
     }
@@ -137,24 +129,30 @@ class UserRepository {
 
   Future<void> addContact(String currentUid, String contactUid) async {
     try {
-      await _firestore
-          .collection(AppConstants.usersCollection)
-          .doc(currentUid)
-          .collection(AppConstants.contactsCollection)
-          .doc(contactUid)
-          .set({'addedAt': FieldValue.serverTimestamp()});
+      await _client.from('contacts').upsert({
+        'owner_id': currentUid,
+        'contact_id': contactUid,
+        'added_at': DateTime.now().toUtc().toIso8601String(),
+      });
     } catch (e) {
       throw NetworkException('Failed to add contact: $e');
     }
   }
 
   Future<bool> isContact(String currentUid, String contactUid) async {
-    final doc = await _firestore
-        .collection(AppConstants.usersCollection)
-        .doc(currentUid)
-        .collection(AppConstants.contactsCollection)
-        .doc(contactUid)
-        .get();
-    return doc.exists;
+    final data = await _client
+        .from('contacts')
+        .select('contact_id')
+        .eq('owner_id', currentUid)
+        .eq('contact_id', contactUid)
+        .maybeSingle();
+    return data != null;
+  }
+
+  Future<void> updateOnlineStatus(String uid, bool isOnline) async {
+    await _client.from('profiles').update({
+      'is_online': isOnline,
+      'last_seen': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', uid);
   }
 }

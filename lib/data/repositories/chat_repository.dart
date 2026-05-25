@@ -1,6 +1,7 @@
 import 'dart:io';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'dart:typed_data';
+
+import 'package:supabase_flutter/supabase_flutter.dart' hide StorageException;
 import 'package:uuid/uuid.dart';
 import 'package:secure_messenger/core/constants/app_constants.dart';
 import 'package:secure_messenger/core/errors/app_exception.dart';
@@ -8,49 +9,61 @@ import 'package:secure_messenger/data/models/chat_model.dart';
 import 'package:secure_messenger/data/models/message_model.dart';
 
 class ChatRepository {
-  final FirebaseFirestore _firestore;
-  final FirebaseStorage _storage;
+  static const _chatMediaBucket = 'chat-media';
+
+  final SupabaseClient _client;
   final Uuid _uuid;
 
-  ChatRepository(this._firestore, this._storage) : _uuid = const Uuid();
+  ChatRepository(this._client) : _uuid = const Uuid();
 
   Stream<List<ChatModel>> watchChats(String uid) {
-    return _firestore
-        .collection(AppConstants.chatsCollection)
-        .where('participantIds', arrayContains: uid)
-        .where('isSecret', isEqualTo: false)
-        .orderBy('lastMessageTime', descending: true)
-        .snapshots()
-        .map((snap) => snap.docs.map((d) => ChatModel.fromDoc(d)).toList());
+    return _watchChats(uid, isSecret: false);
   }
 
   Stream<List<ChatModel>> watchSecretChats(String uid) {
-    return _firestore
-        .collection(AppConstants.chatsCollection)
-        .where('participantIds', arrayContains: uid)
-        .where('isSecret', isEqualTo: true)
-        .orderBy('lastMessageTime', descending: true)
-        .snapshots()
-        .map((snap) => snap.docs.map((d) => ChatModel.fromDoc(d)).toList());
+    return _watchChats(uid, isSecret: true);
   }
 
-  Future<ChatModel> getOrCreateChat(
-      String currentUid, String otherUid, {bool isSecret = false}) async {
-    try {
-      final existing = await _firestore
-          .collection(AppConstants.chatsCollection)
-          .where('participantIds', arrayContains: currentUid)
-          .where('isSecret', isEqualTo: isSecret)
-          .get();
+  Stream<List<ChatModel>> _watchChats(String uid, {required bool isSecret}) {
+    return _client.from('chats').stream(primaryKey: ['id']).map((rows) {
+      final chats = rows
+          .map(ChatModel.fromSupabase)
+          .where((chat) =>
+              chat.isSecret == isSecret && chat.participantIds.contains(uid))
+          .toList();
+      chats.sort((a, b) {
+        final at = a.lastMessageTime ?? a.createdAt;
+        final bt = b.lastMessageTime ?? b.createdAt;
+        return bt.compareTo(at);
+      });
+      return chats;
+    });
+  }
 
-      for (final doc in existing.docs) {
-        final chat = ChatModel.fromDoc(doc);
-        if (chat.participantIds.contains(otherUid)) {
-          return chat;
-        }
+  Future<ChatModel> getChat(String chatId) async {
+    try {
+      final data =
+          await _client.from('chats').select().eq('id', chatId).maybeSingle();
+      if (data == null) {
+        throw const NetworkException('Chat not found.');
+      }
+      return ChatModel.fromSupabase(data);
+    } catch (e) {
+      if (e is AppException) rethrow;
+      throw NetworkException('Failed to load chat: $e');
+    }
+  }
+
+  Future<ChatModel> getOrCreateChat(String currentUid, String otherUid,
+      {bool isSecret = false}) async {
+    try {
+      final chatId = _oneToOneChatId(currentUid, otherUid, isSecret);
+      final existing =
+          await _client.from('chats').select().eq('id', chatId).maybeSingle();
+      if (existing != null) {
+        return ChatModel.fromSupabase(existing);
       }
 
-      final chatId = _uuid.v4();
       final chat = ChatModel(
         id: chatId,
         participantIds: [currentUid, otherUid],
@@ -59,14 +72,7 @@ class ChatRepository {
         createdAt: DateTime.now(),
       );
 
-      final chatData = chat.toMap();
-      chatData['typing'] = {currentUid: false, otherUid: false};
-
-      await _firestore
-          .collection(AppConstants.chatsCollection)
-          .doc(chatId)
-          .set(chatData);
-
+      await _client.from('chats').upsert(chat.toMap());
       return chat;
     } catch (e) {
       throw NetworkException('Failed to create chat: $e');
@@ -74,13 +80,12 @@ class ChatRepository {
   }
 
   Stream<List<MessageModel>> watchMessages(String chatId) {
-    return _firestore
-        .collection(AppConstants.chatsCollection)
-        .doc(chatId)
-        .collection(AppConstants.messagesCollection)
-        .orderBy('timestamp', descending: false)
-        .snapshots()
-        .map((snap) => snap.docs.map((d) => MessageModel.fromDoc(d)).toList());
+    return _client
+        .from('messages')
+        .stream(primaryKey: ['id'])
+        .eq('chat_id', chatId)
+        .order('timestamp', ascending: true)
+        .map((rows) => rows.map(MessageModel.fromSupabase).toList());
   }
 
   Future<MessageModel> sendMessage({
@@ -104,32 +109,30 @@ class ChatRepository {
         thumbnailUrl: thumbnailUrl,
       );
 
-      final batch = _firestore.batch();
-
-      final msgRef = _firestore
-          .collection(AppConstants.chatsCollection)
-          .doc(chatId)
-          .collection(AppConstants.messagesCollection)
-          .doc(msgId);
-
-      batch.set(msgRef, message.toMap());
-
-      final chatRef =
-          _firestore.collection(AppConstants.chatsCollection).doc(chatId);
-
-      final chatDoc = await chatRef.get();
-      final chat = ChatModel.fromDoc(chatDoc);
-      final otherUid = chat.getOtherParticipantId(senderId);
-
-      batch.update(chatRef, {
-        'lastMessage': type == AppConstants.textMessage ? content : '📎 $type',
-        'lastMessageType': type,
-        'lastMessageSenderId': senderId,
-        'lastMessageTime': FieldValue.serverTimestamp(),
-        'unreadCount.$otherUid': FieldValue.increment(1),
+      await _client.from('messages').insert({
+        ...message.toMap(),
+        'chat_id': chatId,
       });
 
-      await batch.commit();
+      final chat = await getChat(chatId);
+      final otherUid = chat.getOtherParticipantId(senderId);
+      final unreadCount = Map<String, int>.from(chat.unreadCount);
+      unreadCount[otherUid] = (unreadCount[otherUid] ?? 0) + 1;
+
+      await _client.from('chats').update({
+        'last_message': type == AppConstants.textMessage
+            ? content
+            : type == AppConstants.imageMessage
+                ? 'Photo'
+                : type == AppConstants.videoMessage
+                    ? 'Video'
+                    : 'Audio',
+        'last_message_type': type,
+        'last_message_sender_id': senderId,
+        'last_message_time': DateTime.now().toUtc().toIso8601String(),
+        'unread_count': unreadCount,
+      }).eq('id', chatId);
+
       return message;
     } catch (e) {
       throw NetworkException('Failed to send message: $e');
@@ -142,12 +145,11 @@ class ChatRepository {
     required String newContent,
   }) async {
     try {
-      await _firestore
-          .collection(AppConstants.chatsCollection)
-          .doc(chatId)
-          .collection(AppConstants.messagesCollection)
-          .doc(messageId)
-          .update({'content': newContent, 'isEdited': true});
+      await _client
+          .from('messages')
+          .update({'content': newContent, 'is_edited': true})
+          .eq('id', messageId)
+          .eq('chat_id', chatId);
     } catch (e) {
       throw NetworkException('Failed to edit message: $e');
     }
@@ -158,12 +160,11 @@ class ChatRepository {
     required String messageId,
   }) async {
     try {
-      await _firestore
-          .collection(AppConstants.chatsCollection)
-          .doc(chatId)
-          .collection(AppConstants.messagesCollection)
-          .doc(messageId)
-          .update({'isDeleted': true, 'content': 'This message was deleted'});
+      await _client
+          .from('messages')
+          .update({'is_deleted': true, 'content': 'This message was deleted'})
+          .eq('id', messageId)
+          .eq('chat_id', chatId);
     } catch (e) {
       throw NetworkException('Failed to delete message: $e');
     }
@@ -171,71 +172,58 @@ class ChatRepository {
 
   Future<void> markMessagesAsRead(String chatId, String uid) async {
     try {
-      final snap = await _firestore
-          .collection(AppConstants.chatsCollection)
-          .doc(chatId)
-          .collection(AppConstants.messagesCollection)
-          .where('senderId', isNotEqualTo: uid)
-          .get();
+      await _client
+          .from('messages')
+          .update({'status': AppConstants.statusRead})
+          .eq('chat_id', chatId)
+          .neq('sender_id', uid);
 
-      if (snap.docs.isEmpty) return;
-
-      final batch = _firestore.batch();
-      for (final doc in snap.docs) {
-        final status = doc.data()['status'] as String? ?? AppConstants.statusSent;
-        if (status != AppConstants.statusRead) {
-          batch.update(doc.reference, {'status': AppConstants.statusRead});
-        }
-      }
-
-      batch.update(
-        _firestore.collection(AppConstants.chatsCollection).doc(chatId),
-        {'unreadCount.$uid': 0},
-      );
-
-      await batch.commit();
+      final chat = await getChat(chatId);
+      final unreadCount = Map<String, int>.from(chat.unreadCount);
+      unreadCount[uid] = 0;
+      await _client
+          .from('chats')
+          .update({'unread_count': unreadCount}).eq('id', chatId);
     } catch (_) {}
   }
 
   Future<void> markMessagesDelivered(String chatId, String uid) async {
     try {
-      final snap = await _firestore
-          .collection(AppConstants.chatsCollection)
-          .doc(chatId)
-          .collection(AppConstants.messagesCollection)
-          .where('senderId', isNotEqualTo: uid)
-          .where('status', isEqualTo: AppConstants.statusSent)
-          .get();
-
-      if (snap.docs.isEmpty) return;
-
-      final batch = _firestore.batch();
-      for (final doc in snap.docs) {
-        batch.update(doc.reference, {'status': AppConstants.statusDelivered});
-      }
-      await batch.commit();
+      await _client
+          .from('messages')
+          .update({'status': AppConstants.statusDelivered})
+          .eq('chat_id', chatId)
+          .neq('sender_id', uid)
+          .eq('status', AppConstants.statusSent);
     } catch (_) {}
   }
 
   Future<void> setTyping(String chatId, String uid, bool isTyping) async {
     try {
-      await _firestore
-          .collection(AppConstants.chatsCollection)
-          .doc(chatId)
-          .update({'typing.$uid': isTyping});
+      final chat = await getChat(chatId);
+      final typing = <String, bool>{
+        for (final id in chat.participantIds) id: false,
+      };
+      final row = await _client
+          .from('chats')
+          .select('typing')
+          .eq('id', chatId)
+          .single();
+      typing.addAll(Map<String, bool>.from(row['typing'] ?? {}));
+      typing[uid] = isTyping;
+      await _client.from('chats').update({'typing': typing}).eq('id', chatId);
     } catch (_) {}
   }
 
   Stream<Map<String, bool>> watchTyping(String chatId) {
-    return _firestore
-        .collection(AppConstants.chatsCollection)
-        .doc(chatId)
-        .snapshots()
-        .map((doc) {
-      final data = doc.data();
-      if (data == null || !data.containsKey('typing')) return {};
-      return Map<String, bool>.from(data['typing'] as Map);
-    });
+    return _client
+        .from('chats')
+        .stream(primaryKey: ['id'])
+        .eq('id', chatId)
+        .map((rows) {
+          if (rows.isEmpty) return <String, bool>{};
+          return Map<String, bool>.from(rows.first['typing'] ?? {});
+        });
   }
 
   Future<String> uploadMedia({
@@ -244,13 +232,124 @@ class ChatRepository {
     required String type,
   }) async {
     try {
-      final ext = type == AppConstants.imageMessage ? 'jpg' : 'mp4';
-      final fileName = '${_uuid.v4()}.$ext';
-      final ref = _storage.ref().child('chat_media/$chatId/$fileName');
-      final uploadTask = await ref.putFile(file);
-      return await uploadTask.ref.getDownloadURL();
+      final ext = _extensionFor(file.path, type);
+      final path = '$chatId/${_uuid.v4()}.$ext';
+      await _client.storage.from(_chatMediaBucket).upload(
+            path,
+            file,
+            fileOptions: FileOptions(
+              contentType: _contentTypeFor(type),
+              upsert: false,
+            ),
+          );
+      return path;
     } catch (e) {
       throw StorageException('Failed to upload media: $e');
     }
+  }
+
+  Future<String> uploadEncryptedMediaBytes({
+    required String chatId,
+    required Uint8List encryptedBytes,
+    required String type,
+  }) async {
+    try {
+      final path = '$chatId/${_uuid.v4()}.$type.enc';
+      await _client.storage.from(_chatMediaBucket).uploadBinary(
+            path,
+            encryptedBytes,
+            fileOptions: const FileOptions(
+              contentType: 'application/octet-stream',
+              upsert: false,
+            ),
+          );
+      return path;
+    } catch (e) {
+      throw StorageException('Failed to upload encrypted media: $e');
+    }
+  }
+
+  Future<String> createSignedMediaUrl(String path) {
+    if (path.startsWith('http')) return Future.value(path);
+    return _client.storage.from(_chatMediaBucket).createSignedUrl(path, 3600);
+  }
+
+  Future<Uint8List> downloadMediaBytes(String path) {
+    return _client.storage.from(_chatMediaBucket).download(path);
+  }
+
+  Future<Map<String, String>> getParticipantPublicKeys(
+    List<String> participantIds,
+  ) async {
+    try {
+      final rows = await _client
+          .from('profiles')
+          .select('id, public_key')
+          .inFilter('id', participantIds);
+      final result = <String, String>{};
+      for (final row in rows) {
+        final publicKey = row['public_key'] as String?;
+        if (publicKey == null || publicKey.isEmpty) {
+          throw NetworkException('User ${row['id']} has no encryption key.');
+        }
+        result[row['id'] as String] = publicKey;
+      }
+      if (result.length != participantIds.length) {
+        throw const NetworkException('Missing participant encryption keys.');
+      }
+      return result;
+    } catch (e) {
+      if (e is AppException) rethrow;
+      throw NetworkException('Failed to load encryption keys: $e');
+    }
+  }
+
+  Future<void> saveEncryptedChatKeys({
+    required String chatId,
+    required Map<String, String> encryptedKeys,
+  }) async {
+    try {
+      await _client
+          .from('chats')
+          .update({'encrypted_keys': encryptedKeys}).eq('id', chatId);
+    } catch (e) {
+      throw NetworkException('Failed to save encrypted chat keys: $e');
+    }
+  }
+
+  String _extensionFor(String path, String type) {
+    final lastDot = path.lastIndexOf('.');
+    if (lastDot != -1 && lastDot < path.length - 1) {
+      return path.substring(lastDot + 1).toLowerCase();
+    }
+    switch (type) {
+      case AppConstants.imageMessage:
+        return 'jpg';
+      case AppConstants.videoMessage:
+        return 'mp4';
+      case AppConstants.audioMessage:
+        return 'm4a';
+      default:
+        return 'bin';
+    }
+  }
+
+  String _contentTypeFor(String type) {
+    switch (type) {
+      case AppConstants.imageMessage:
+        return 'image/jpeg';
+      case AppConstants.videoMessage:
+        return 'video/mp4';
+      case AppConstants.audioMessage:
+        return 'audio/mpeg';
+      default:
+        return 'application/octet-stream';
+    }
+  }
+
+  String _oneToOneChatId(String firstUid, String secondUid, bool isSecret) {
+    final ids = [firstUid, secondUid]..sort();
+    final prefix = isSecret ? 'secret' : 'chat';
+    return '${prefix}_${ids[0]}_${ids[1]}';
   }
 }

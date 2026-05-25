@@ -1,190 +1,101 @@
 # SecureMessenger
 
-A secure mobile messaging app built with Flutter and Firebase, featuring end-to-end encryption, biometric authentication, and real-time messaging.
+A secure mobile messaging app built with Flutter and Supabase, featuring biometric authentication, end-to-end encrypted secret chats, and realtime messaging.
 
 ## Features
 
-- **Login / Signup** — Email & password authentication via Firebase Auth
-- **Biometric Auth** — Fingerprint / Face ID login using `local_auth`
-- **User Profile** — Display name, username, bio, profile photo, QR code
+- **Login / Signup** — Email and password authentication via Supabase Auth
+- **Biometric Auth** — Fingerprint / Face ID unlock using `local_auth`
+- **User Profile** — Display name, username, bio, phone, profile photo, QR code
 - **Search Users** — Search by username with live results
 - **Add Contacts** — Via username search or QR code scan
-- **Regular Chat** — Text, image, and video messages
-  - Read receipts (✓ sent, ✓✓ read)
-  - Typing indicators (animated dots)
-  - Edit & delete messages
-- **Secret Chat** — AES-256 CBC end-to-end encrypted one-on-one chats
-  - Keys stored locally in device secure storage (Keychain / Keystore)
-  - Encrypted content is unreadable in Firestore backend
-- **Dark Theme** — Modern dark UI throughout
+- **Regular Chat** — Text, image, video, and audio-file messages
+  - Read receipts
+  - Typing indicators
+  - Edit and delete messages
+- **Secret Chat** — End-to-end encrypted one-on-one chats
+  - RSA identity keys are generated on-device; private keys stay in secure storage
+  - Each secret chat uses a shared AES-GCM key wrapped separately for each participant
+  - Secret text, images, videos, and audio files are encrypted before Supabase upload
 
 ## Tech Stack
 
 | Layer | Technology |
-|-------|-----------|
-| Framework | Flutter (Dart) |
-| Backend | Firebase (Auth, Firestore, Storage) |
+|-------|------------|
+| Framework | Flutter |
+| Backend | Supabase Auth, Postgres, Realtime, Storage |
 | State Management | Provider |
-| Encryption | `encrypt` (AES-256 CBC) + `flutter_secure_storage` |
+| Encryption | `pointycastle` RSA-OAEP + AES-GCM, `flutter_secure_storage` |
 | Biometrics | `local_auth` |
-| QR | `qr_flutter` + `mobile_scanner` |
-| Media | `image_picker`, `video_player`, `cached_network_image` |
+| QR | `qr_flutter`, `mobile_scanner` |
+| Media | `image_picker`, `file_picker`, `video_player`, `cached_network_image` |
 
-## Project Structure
+## Supabase Setup
 
-```
-lib/
-├── core/
-│   ├── constants/       # AppConstants (collection names, keys, timeouts)
-│   ├── errors/          # AppException hierarchy + Firebase error mapping
-│   ├── services/        # EncryptionService, BiometricService
-│   └── theme/           # AppTheme (dark)
-├── data/
-│   ├── models/          # UserModel, ChatModel, MessageModel
-│   └── repositories/   # AuthRepository, UserRepository, ChatRepository
-├── firebase_options.dart  # ← YOU MUST FILL THIS IN (see setup below)
-├── main.dart
-└── presentation/
-    ├── auth/            # Login, Signup screens + AuthProvider
-    ├── chat/            # ChatScreen + MessageProvider
-    ├── contacts/        # ContactsScreen + ContactsProvider
-    ├── home/            # HomeScreen (tabbed navigation)
-    ├── profile/         # ProfileScreen + ProfileProvider
-    ├── secret_chat/     # SecretChatScreen + SecretMessageProvider
-    └── widgets/         # Shared: AppButton, AppTextField, UserAvatar, ErrorBanner
-```
+1. Create a project at https://supabase.com.
+2. Open **Authentication → Providers → Email**.
+3. Enable **Email** auth. For easier testing, disable email confirmation.
+4. Open **SQL Editor**.
+5. Paste and run the full contents of `supabase_schema.sql`.
+6. Open **Project Settings → API**.
+7. Copy:
+   - Project URL
+   - anon public key
+8. Put them in `lib/supabase_options.dart`:
 
-## Firebase Setup (Required before running)
-
-### 1. Create a Firebase Project
-
-1. Go to [https://console.firebase.google.com](https://console.firebase.google.com)
-2. Click **Add project** → name it `secure-messenger`
-3. Disable Google Analytics (optional) → **Create project**
-
-### 2. Enable Firebase Services
-
-In your Firebase project console:
-
-- **Authentication** → Sign-in method → Enable **Email/Password**
-- **Firestore Database** → Create database → Start in **production mode** → choose a region
-- **Storage** → Get started → Start in **production mode**
-
-### 3. Add Apps to Firebase
-
-**Android:**
-- Package name: `com.securemessenger.secure_messenger`
-- Download `google-services.json` → place in `android/app/`
-
-**iOS:**
-- Bundle ID: `com.securemessenger.secureMessenger`
-- Download `GoogleService-Info.plist` → place in `ios/Runner/`
-
-### 4. Generate firebase_options.dart
-
-```bash
-# Install FlutterFire CLI (once)
-dart pub global activate flutterfire_cli
-
-# Configure (run from project root)
-flutterfire configure --project=YOUR_PROJECT_ID
-```
-
-This auto-generates `lib/firebase_options.dart` with your real credentials, replacing the placeholder file.
-
-### 5. Apply Firestore Security Rules
-
-In Firebase Console → Firestore → Rules, paste the contents of `firestore.rules`.
-
-### 6. Apply Storage Rules
-
-In Firebase Console → Storage → Rules:
-
-```
-rules_version = '2';
-service firebase.storage {
-  match /b/{bucket}/o {
-    match /profile_photos/{userId}.jpg {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
-    }
-    match /chat_media/{chatId}/{fileName} {
-      allow read, write: if request.auth != null;
-    }
-  }
+```dart
+class SupabaseOptions {
+  static const url = 'https://YOUR_PROJECT_REF.supabase.co';
+  static const anonKey = 'YOUR_SUPABASE_ANON_KEY';
 }
 ```
 
-### 7. Create Firestore Indexes
+The SQL file creates:
 
-The app requires a composite index for chat queries. Firebase will prompt you with a link in the debug console on first run — click it to auto-create the index, or create manually:
+- `profiles`
+- `contacts`
+- `chats`
+- `messages`
+- `profile-photos` storage bucket
+- `chat-media` storage bucket
+- Row Level Security policies for authenticated users and chat participants
 
-**Collection:** `chats`  
-**Fields:** `participantIds` (Arrays) + `isSecret` (Ascending) + `lastMessageTime` (Descending)
-
-### 8. Run the App
+## Run
 
 ```bash
 flutter pub get
 flutter run
 ```
 
-## Running on Device / Emulator
-
-```bash
-# List available devices
-flutter devices
-
-# Run on specific device
-flutter run -d <device-id>
-
-# Run on iOS simulator
-flutter run -d iPhone
-
-# Run on Android emulator
-flutter run -d emulator-5554
-```
-
 ## Security Notes
 
-- AES-256 CBC encryption keys are generated per secret chat and stored **only** on the device using `flutter_secure_storage` (iOS Keychain / Android EncryptedSharedPreferences)
-- Encrypted messages stored in Firestore are unreadable without the local key
-- SSL/TLS enforced via Android `network_security_config.xml`
-- No API keys or secrets are hardcoded in source code
-- Biometric authentication uses the OS-level biometric APIs (no raw biometric data is accessed)
+- Secret chats use AES-GCM with a fresh nonce per encrypted payload.
+- Secret chat keys are stored locally and are only stored in Supabase after RSA-OAEP wrapping for each participant.
+- Secret media is encrypted before upload.
+- Supabase RLS policies restrict profile/contact/chat/message/storage access.
+- Chat media bucket is private; the app creates short-lived signed URLs for regular media viewing.
+- Biometric authentication uses OS-level APIs; raw biometric data is never accessed.
 
 ## Audit Checklist
 
 | Feature | Status |
 |---------|--------|
-| App runs without crashing | ✅ |
+| App runs without crashing | ✅ after Supabase config |
 | Login / Signup page | ✅ |
 | User authentication | ✅ |
 | User profile with photo, username, bio | ✅ |
 | QR code generation | ✅ |
 | Biometric authentication | ✅ |
 | Search users by username | ✅ |
-| Add contacts (search + QR scan) | ✅ |
+| Add contacts by search + QR scan | ✅ |
 | Send text messages | ✅ |
 | Send images | ✅ |
 | Send videos | ✅ |
+| Send audio files | ✅ |
 | Read receipts | ✅ |
 | Typing indicators | ✅ |
 | Edit messages | ✅ |
 | Delete messages | ✅ |
-| Secret chat (E2E encrypted) | ✅ |
+| Secret chat E2E encryption | ✅ |
 | iOS support | ✅ |
 | Android support | ✅ |
-
-## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.

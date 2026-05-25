@@ -113,7 +113,9 @@ class MessageProvider extends ChangeNotifier {
       },
     );
 
-    _chatRepository.markMessagesDelivered(chatId, currentUid).catchError((_) {});
+    _chatRepository
+        .markMessagesDelivered(chatId, currentUid)
+        .catchError((_) {});
     _chatRepository.markMessagesAsRead(chatId, currentUid).catchError((_) {});
   }
 
@@ -163,7 +165,11 @@ class MessageProvider extends ChangeNotifier {
       await _chatRepository.sendMessage(
         chatId: chatId,
         senderId: senderId,
-        content: type == AppConstants.imageMessage ? '📷 Photo' : '🎥 Video',
+        content: type == AppConstants.imageMessage
+            ? 'Photo'
+            : type == AppConstants.videoMessage
+                ? 'Video'
+                : 'Audio',
         type: type,
         mediaUrl: url,
       );

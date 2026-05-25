@@ -46,7 +46,8 @@ class UserAvatar extends StatelessWidget {
               width: radius * 0.5,
               height: radius * 0.5,
               decoration: BoxDecoration(
-                color: isOnline ? AppTheme.secondaryColor : AppTheme.subtitleColor,
+                color:
+                    isOnline ? AppTheme.secondaryColor : AppTheme.subtitleColor,
                 shape: BoxShape.circle,
                 border: Border.all(
                   color: AppTheme.backgroundColor,
@@ -61,7 +62,13 @@ class UserAvatar extends StatelessWidget {
 
   Widget _initials() {
     final initials = displayName.isNotEmpty
-        ? displayName.trim().split(' ').map((w) => w[0]).take(2).join().toUpperCase()
+        ? displayName
+            .trim()
+            .split(' ')
+            .map((w) => w[0])
+            .take(2)
+            .join()
+            .toUpperCase()
         : '?';
     return Text(
       initials,

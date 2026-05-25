@@ -1,12 +1,22 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:secure_messenger/core/theme/app_theme.dart';
 
 class ImageViewerScreen extends StatelessWidget {
   final String imageUrl;
+  final Uint8List? imageBytes;
   final String? heroTag;
 
-  const ImageViewerScreen({super.key, required this.imageUrl, this.heroTag});
+  const ImageViewerScreen({super.key, required this.imageUrl, this.heroTag})
+      : imageBytes = null;
+
+  const ImageViewerScreen.bytes({
+    super.key,
+    required this.imageBytes,
+    this.heroTag,
+  }) : imageUrl = '';
 
   @override
   Widget build(BuildContext context) {
@@ -24,10 +34,11 @@ class ImageViewerScreen extends StatelessWidget {
         ],
       ),
       body: PhotoView(
-        imageProvider: NetworkImage(imageUrl),
-        heroAttributes: heroTag != null
-            ? PhotoViewHeroAttributes(tag: heroTag!)
-            : null,
+        imageProvider: imageBytes != null
+            ? MemoryImage(imageBytes!)
+            : NetworkImage(imageUrl),
+        heroAttributes:
+            heroTag != null ? PhotoViewHeroAttributes(tag: heroTag!) : null,
         minScale: PhotoViewComputedScale.contained,
         maxScale: PhotoViewComputedScale.covered * 3,
         backgroundDecoration: const BoxDecoration(color: Colors.black),

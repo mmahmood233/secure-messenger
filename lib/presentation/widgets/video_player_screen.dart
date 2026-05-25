@@ -1,11 +1,25 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:secure_messenger/core/theme/app_theme.dart';
 
 class VideoPlayerScreen extends StatefulWidget {
-  final String videoUrl;
+  final String? videoUrl;
+  final File? file;
+  final bool isAudio;
 
-  const VideoPlayerScreen({super.key, required this.videoUrl});
+  const VideoPlayerScreen({
+    super.key,
+    required this.videoUrl,
+    this.isAudio = false,
+  }) : file = null;
+
+  const VideoPlayerScreen.file({
+    super.key,
+    required this.file,
+    this.isAudio = false,
+  }) : videoUrl = null;
 
   @override
   State<VideoPlayerScreen> createState() => _VideoPlayerScreenState();
@@ -19,7 +33,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   @override
   void initState() {
     super.initState();
-    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl))
+    _controller = widget.file != null
+        ? VideoPlayerController.file(widget.file!)
+        : VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl!))
       ..initialize().then((_) {
         if (mounted) {
           setState(() => _isInitialized = true);
@@ -62,10 +78,14 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 : Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      AspectRatio(
-                        aspectRatio: _controller.value.aspectRatio,
-                        child: VideoPlayer(_controller),
-                      ),
+                      if (widget.isAudio)
+                        const Icon(Icons.audiotrack,
+                            color: Colors.white, size: 88)
+                      else
+                        AspectRatio(
+                          aspectRatio: _controller.value.aspectRatio,
+                          child: VideoPlayer(_controller),
+                        ),
                       const SizedBox(height: 16),
                       VideoProgressIndicator(
                         _controller,
@@ -86,8 +106,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                 color: Colors.white, size: 32),
                             onPressed: () {
                               final pos = _controller.value.position;
-                              _controller.seekTo(
-                                  pos - const Duration(seconds: 10));
+                              _controller
+                                  .seekTo(pos - const Duration(seconds: 10));
                             },
                           ),
                           const SizedBox(width: 16),
@@ -116,8 +136,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                 color: Colors.white, size: 32),
                             onPressed: () {
                               final pos = _controller.value.position;
-                              _controller.seekTo(
-                                  pos + const Duration(seconds: 10));
+                              _controller
+                                  .seekTo(pos + const Duration(seconds: 10));
                             },
                           ),
                         ],

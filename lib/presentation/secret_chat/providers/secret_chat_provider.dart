@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:secure_messenger/core/constants/app_constants.dart';
@@ -30,10 +31,12 @@ class SecretMessageProvider extends ChangeNotifier {
   SecretMessageProvider(this._chatRepository, this._encryptionService);
 
   Future<void> initChat(String chatId, String currentUid) async {
-    _keysReady = await _encryptionService.hasKeysForChat(chatId);
-    if (!_keysReady) {
-      await _encryptionService.generateKeyPair(chatId);
-      _keysReady = true;
+    try {
+      await _prepareSecretChatKey(chatId, currentUid);
+    } on AppException catch (e) {
+      _errorMessage = e.message;
+      notifyListeners();
+      return;
     }
     notifyListeners();
 
@@ -50,7 +53,8 @@ class SecretMessageProvider extends ChangeNotifier {
           }
           if (msg.type == AppConstants.textMessage) {
             try {
-              final plain = await _encryptionService.decrypt(msg.content, chatId);
+              final plain =
+                  await _encryptionService.decrypt(msg.content, chatId);
               decrypted.add(msg.copyWith(content: plain));
             } catch (_) {
               decrypted.add(msg.copyWith(content: '🔒 [Encrypted message]'));
@@ -75,7 +79,9 @@ class SecretMessageProvider extends ChangeNotifier {
       },
     );
 
-    _chatRepository.markMessagesDelivered(chatId, currentUid).catchError((_) {});
+    _chatRepository
+        .markMessagesDelivered(chatId, currentUid)
+        .catchError((_) {});
     _chatRepository.markMessagesAsRead(chatId, currentUid).catchError((_) {});
   }
 
@@ -94,7 +100,8 @@ class SecretMessageProvider extends ChangeNotifier {
     _isSending = true;
     notifyListeners();
     try {
-      final encrypted = await _encryptionService.encrypt(content.trim(), chatId);
+      final encrypted =
+          await _encryptionService.encrypt(content.trim(), chatId);
       await _chatRepository.sendMessage(
         chatId: chatId,
         senderId: senderId,
@@ -118,19 +125,27 @@ class SecretMessageProvider extends ChangeNotifier {
     _isSending = true;
     notifyListeners();
     try {
-      final url = await _chatRepository.uploadMedia(
+      final encryptedPayload = await _encryptionService.encryptBytesForChat(
+        await file.readAsBytes(),
+        chatId,
+      );
+      final encryptedUrl = await _chatRepository.uploadEncryptedMediaBytes(
         chatId: chatId,
-        file: file,
+        encryptedBytes: utf8.encode(encryptedPayload),
         type: type,
       );
-      final label = type == AppConstants.imageMessage ? '📷 Photo' : '🎥 Video';
+      final label = type == AppConstants.imageMessage
+          ? 'Photo'
+          : type == AppConstants.videoMessage
+              ? 'Video'
+              : 'Audio';
       final encrypted = await _encryptionService.encrypt(label, chatId);
       await _chatRepository.sendMessage(
         chatId: chatId,
         senderId: senderId,
         content: encrypted,
         type: type,
-        mediaUrl: url,
+        mediaUrl: encryptedUrl,
       );
     } on AppException catch (e) {
       _errorMessage = e.message;
@@ -186,6 +201,45 @@ class SecretMessageProvider extends ChangeNotifier {
   void clearError() {
     _errorMessage = null;
     notifyListeners();
+  }
+
+  Future<void> _prepareSecretChatKey(String chatId, String currentUid) async {
+    _keysReady = await _encryptionService.hasKeysForChat(chatId);
+    if (_keysReady) return;
+
+    final chat = await _chatRepository.getChat(chatId);
+    final encryptedForCurrentUser = chat.encryptedKeys[currentUid];
+    if (encryptedForCurrentUser != null) {
+      final chatKey = await _encryptionService.decryptChatKeyForCurrentDevice(
+        encryptedForCurrentUser,
+      );
+      await _encryptionService.storeChatKey(chatId, chatKey);
+      _keysReady = true;
+      return;
+    }
+
+    if (chat.encryptedKeys.isNotEmpty) {
+      throw const EncryptionException(
+        'This device does not have access to the secret chat key.',
+      );
+    }
+
+    final chatKey = await _encryptionService.generateAndStoreChatKey(chatId);
+    final publicKeys = await _chatRepository.getParticipantPublicKeys(
+      chat.participantIds,
+    );
+    final encryptedKeys = <String, String>{};
+    for (final entry in publicKeys.entries) {
+      encryptedKeys[entry.key] = await _encryptionService.encryptChatKeyForUser(
+        chatKey,
+        entry.value,
+      );
+    }
+    await _chatRepository.saveEncryptedChatKeys(
+      chatId: chatId,
+      encryptedKeys: encryptedKeys,
+    );
+    _keysReady = true;
   }
 
   @override

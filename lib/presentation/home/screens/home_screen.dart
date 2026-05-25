@@ -1,7 +1,5 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:secure_messenger/core/constants/app_constants.dart';
 import 'package:secure_messenger/core/utils/date_formatter.dart';
 import 'package:secure_messenger/core/theme/app_theme.dart';
 import 'package:secure_messenger/data/models/chat_model.dart';
@@ -71,13 +69,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   void _setOnlineStatus(String uid, bool isOnline) {
-    FirebaseFirestore.instance
-        .collection(AppConstants.usersCollection)
-        .doc(uid)
-        .update({
-      'isOnline': isOnline,
-      'lastSeen': FieldValue.serverTimestamp(),
-    }).catchError((_) {});
+    context
+        .read<UserRepository>()
+        .updateOnlineStatus(uid, isOnline)
+        .catchError((_) {});
   }
 
   @override
@@ -208,14 +203,16 @@ class _ChatList extends StatelessWidget {
                 const SizedBox(height: 16),
                 Text(
                   isSecret ? 'No secret chats yet' : 'No chats yet',
-                  style: const TextStyle(color: AppTheme.subtitleColor, fontSize: 16),
+                  style: const TextStyle(
+                      color: AppTheme.subtitleColor, fontSize: 16),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   isSecret
                       ? 'Start an encrypted conversation'
                       : 'Find contacts and start chatting',
-                  style: const TextStyle(color: AppTheme.subtitleColor, fontSize: 13),
+                  style: const TextStyle(
+                      color: AppTheme.subtitleColor, fontSize: 13),
                 ),
               ],
             ),
@@ -307,7 +304,9 @@ class _ChatTile extends StatelessWidget {
                 Text(
                   _formatTime(chat.lastMessageTime!),
                   style: TextStyle(
-                    color: unread > 0 ? AppTheme.primaryColor : AppTheme.subtitleColor,
+                    color: unread > 0
+                        ? AppTheme.primaryColor
+                        : AppTheme.subtitleColor,
                     fontSize: 12,
                   ),
                 ),
@@ -329,9 +328,12 @@ class _ChatTile extends StatelessWidget {
               ),
               if (unread > 0)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: isSecret ? AppTheme.secretChatColor : AppTheme.primaryColor,
+                    color: isSecret
+                        ? AppTheme.secretChatColor
+                        : AppTheme.primaryColor,
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(

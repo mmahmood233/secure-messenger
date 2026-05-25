@@ -122,12 +122,14 @@ class _ContactsScreenState extends State<ContactsScreen> {
                   const SizedBox(height: 16),
                   const Text(
                     'No contacts yet',
-                    style: TextStyle(color: AppTheme.subtitleColor, fontSize: 16),
+                    style:
+                        TextStyle(color: AppTheme.subtitleColor, fontSize: 16),
                   ),
                   const SizedBox(height: 8),
                   const Text(
                     'Search for users to add them',
-                    style: TextStyle(color: AppTheme.subtitleColor, fontSize: 13),
+                    style:
+                        TextStyle(color: AppTheme.subtitleColor, fontSize: 13),
                   ),
                 ],
               ),
@@ -138,7 +140,8 @@ class _ContactsScreenState extends State<ContactsScreen> {
             itemCount: contacts.contacts.length,
             itemBuilder: (_, i) {
               final contact = contacts.contacts[i];
-              return _ContactTile(contact: contact, onTap: () => _openChat(contact));
+              return _ContactTile(
+                  contact: contact, onTap: () => _openChat(contact));
             },
           );
         },
@@ -170,7 +173,8 @@ class _ContactTile extends StatelessWidget {
         isOnline: contact.isOnline,
       ),
       title: Text(contact.displayName,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+          style: const TextStyle(
+              color: Colors.white, fontWeight: FontWeight.w500)),
       subtitle: Text('@${contact.username}',
           style: const TextStyle(color: AppTheme.subtitleColor, fontSize: 13)),
       trailing: const Icon(Icons.chevron_right, color: AppTheme.subtitleColor),
@@ -196,7 +200,8 @@ class _SearchResults extends StatelessWidget {
     }
     if (results.isEmpty) {
       return const Center(
-        child: Text('No users found', style: TextStyle(color: AppTheme.subtitleColor)),
+        child: Text('No users found',
+            style: TextStyle(color: AppTheme.subtitleColor)),
       );
     }
     return ListView.builder(
@@ -212,10 +217,13 @@ class _SearchResults extends StatelessWidget {
             displayName: user.displayName,
           ),
           title: Text(user.displayName,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w500)),
           subtitle: Text('@${user.username}',
-              style: const TextStyle(color: AppTheme.subtitleColor, fontSize: 13)),
-          trailing: const Icon(Icons.person_add_outlined, color: AppTheme.primaryColor),
+              style:
+                  const TextStyle(color: AppTheme.subtitleColor, fontSize: 13)),
+          trailing: const Icon(Icons.person_add_outlined,
+              color: AppTheme.primaryColor),
         );
       },
     );
@@ -263,15 +271,24 @@ class _AddContactSheet extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          UserAvatar(photoUrl: user.photoUrl, displayName: user.displayName, radius: 36),
+          UserAvatar(
+              photoUrl: user.photoUrl,
+              displayName: user.displayName,
+              radius: 36),
           const SizedBox(height: 12),
           Text(user.displayName,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+              style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white)),
           Text('@${user.username}',
-              style: const TextStyle(color: AppTheme.primaryColor, fontSize: 14)),
+              style:
+                  const TextStyle(color: AppTheme.primaryColor, fontSize: 14)),
           if (user.bio != null && user.bio!.isNotEmpty) ...[
             const SizedBox(height: 8),
-            Text(user.bio!, style: const TextStyle(color: AppTheme.subtitleColor, fontSize: 13)),
+            Text(user.bio!,
+                style: const TextStyle(
+                    color: AppTheme.subtitleColor, fontSize: 13)),
           ],
           const SizedBox(height: 24),
           Row(
@@ -285,7 +302,9 @@ class _AddContactSheet extends StatelessWidget {
                     if (context.mounted) {
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('${user.displayName} added to contacts')),
+                        SnackBar(
+                            content:
+                                Text('${user.displayName} added to contacts')),
                       );
                     }
                   },
@@ -294,7 +313,8 @@ class _AddContactSheet extends StatelessWidget {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppTheme.primaryColor,
                     side: const BorderSide(color: AppTheme.primaryColor),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                 ),
@@ -311,7 +331,8 @@ class _AddContactSheet extends StatelessWidget {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primaryColor,
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                 ),
@@ -331,7 +352,8 @@ class _AddContactSheet extends StatelessWidget {
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppTheme.secretChatColor,
                 side: const BorderSide(color: AppTheme.secretChatColor),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
             ),
@@ -373,21 +395,19 @@ class _QrScannerScreenState extends State<_QrScannerScreen> {
           final chatRepo = context.read<ChatRepository>();
           final user = await contacts.getUserByUid(uid);
 
-          if (!mounted) return;
-          // ignore: use_build_context_synchronously
-          final ctx = context;
+          if (!context.mounted) return;
 
           if (user == null) {
-            ScaffoldMessenger.of(ctx).showSnackBar(
+            ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('User not found')),
             );
             setState(() => _scanned = false);
             return;
           }
 
-          Navigator.pop(ctx);
+          Navigator.pop(context);
           showModalBottomSheet(
-            context: ctx,
+            context: context,
             backgroundColor: AppTheme.cardColor,
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -398,9 +418,9 @@ class _QrScannerScreenState extends State<_QrScannerScreen> {
                 chatRepo
                     .getOrCreateChat(auth.currentUser!.uid, user.uid)
                     .then((chat) {
-                  if (ctx.mounted) {
+                  if (context.mounted) {
                     Navigator.push(
-                      ctx,
+                      context,
                       MaterialPageRoute(
                         builder: (_) => ChatScreen(chat: chat, otherUser: user),
                       ),

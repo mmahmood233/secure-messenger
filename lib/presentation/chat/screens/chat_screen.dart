@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -10,6 +11,7 @@ import 'package:secure_messenger/core/theme/app_theme.dart';
 import 'package:secure_messenger/data/models/chat_model.dart';
 import 'package:secure_messenger/data/models/message_model.dart';
 import 'package:secure_messenger/data/models/user_model.dart';
+import 'package:secure_messenger/data/repositories/chat_repository.dart';
 import 'package:secure_messenger/data/repositories/user_repository.dart';
 import 'package:secure_messenger/presentation/auth/providers/auth_provider.dart';
 import 'package:secure_messenger/presentation/chat/providers/chat_provider.dart';
@@ -121,6 +123,19 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  Future<void> _pickAndSendAudio() async {
+    final uid = context.read<AuthProvider>().currentUser!.uid;
+    final picked = await FilePicker.platform.pickFiles(type: FileType.audio);
+    final path = picked?.files.single.path;
+    if (path == null) return;
+    await _messageProvider.sendMediaMessage(
+      chatId: widget.chat.id,
+      senderId: uid,
+      file: File(path),
+      type: AppConstants.audioMessage,
+    );
+  }
+
   void _showMediaOptions() {
     showModalBottomSheet(
       context: context,
@@ -135,27 +150,46 @@ class _ChatScreenState extends State<ChatScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: const Icon(Icons.photo_library_outlined, color: AppTheme.primaryColor),
-                title: const Text('Photo from Gallery', style: TextStyle(color: Colors.white)),
+                leading: const Icon(Icons.photo_library_outlined,
+                    color: AppTheme.primaryColor),
+                title: const Text('Photo from Gallery',
+                    style: TextStyle(color: Colors.white)),
                 onTap: () {
                   Navigator.pop(context);
-                  _pickAndSendMedia(ImageSource.gallery, AppConstants.imageMessage);
+                  _pickAndSendMedia(
+                      ImageSource.gallery, AppConstants.imageMessage);
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.camera_alt_outlined, color: AppTheme.primaryColor),
-                title: const Text('Take Photo', style: TextStyle(color: Colors.white)),
+                leading: const Icon(Icons.camera_alt_outlined,
+                    color: AppTheme.primaryColor),
+                title: const Text('Take Photo',
+                    style: TextStyle(color: Colors.white)),
                 onTap: () {
                   Navigator.pop(context);
-                  _pickAndSendMedia(ImageSource.camera, AppConstants.imageMessage);
+                  _pickAndSendMedia(
+                      ImageSource.camera, AppConstants.imageMessage);
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.videocam_outlined, color: AppTheme.primaryColor),
-                title: const Text('Video from Gallery', style: TextStyle(color: Colors.white)),
+                leading: const Icon(Icons.videocam_outlined,
+                    color: AppTheme.primaryColor),
+                title: const Text('Video from Gallery',
+                    style: TextStyle(color: Colors.white)),
                 onTap: () {
                   Navigator.pop(context);
-                  _pickAndSendMedia(ImageSource.gallery, AppConstants.videoMessage);
+                  _pickAndSendMedia(
+                      ImageSource.gallery, AppConstants.videoMessage);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.audiotrack_outlined,
+                    color: AppTheme.primaryColor),
+                title: const Text('Audio File',
+                    style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickAndSendAudio();
                 },
               ),
             ],
@@ -179,8 +213,10 @@ class _ChatScreenState extends State<ChatScreen> {
           children: [
             if (message.type == AppConstants.textMessage)
               ListTile(
-                leading: const Icon(Icons.copy_outlined, color: AppTheme.subtitleColor),
-                title: const Text('Copy Text', style: TextStyle(color: Colors.white)),
+                leading: const Icon(Icons.copy_outlined,
+                    color: AppTheme.subtitleColor),
+                title: const Text('Copy Text',
+                    style: TextStyle(color: Colors.white)),
                 onTap: () {
                   Navigator.pop(context);
                   Clipboard.setData(ClipboardData(text: message.content));
@@ -193,10 +229,13 @@ class _ChatScreenState extends State<ChatScreen> {
                   );
                 },
               ),
-            if (message.senderId == currentUid && message.type == AppConstants.textMessage)
+            if (message.senderId == currentUid &&
+                message.type == AppConstants.textMessage)
               ListTile(
-                leading: const Icon(Icons.edit_outlined, color: AppTheme.primaryColor),
-                title: const Text('Edit Message', style: TextStyle(color: Colors.white)),
+                leading: const Icon(Icons.edit_outlined,
+                    color: AppTheme.primaryColor),
+                title: const Text('Edit Message',
+                    style: TextStyle(color: Colors.white)),
                 onTap: () {
                   Navigator.pop(context);
                   setState(() {
@@ -207,8 +246,10 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             if (message.senderId == currentUid)
               ListTile(
-                leading: const Icon(Icons.delete_outline, color: AppTheme.errorColor),
-                title: const Text('Delete Message', style: TextStyle(color: AppTheme.errorColor)),
+                leading: const Icon(Icons.delete_outline,
+                    color: AppTheme.errorColor),
+                title: const Text('Delete Message',
+                    style: TextStyle(color: AppTheme.errorColor)),
                 onTap: () {
                   Navigator.pop(context);
                   _messageProvider.deleteMessage(
@@ -242,7 +283,8 @@ class _ChatScreenState extends State<ChatScreen> {
         ));
         lastDate = msgDate;
       }
-      final isMe = msg.senderId == context.read<AuthProvider>().currentUser!.uid;
+      final isMe =
+          msg.senderId == context.read<AuthProvider>().currentUser!.uid;
       items.add(_MessageBubble(
         message: msg,
         isMe: isMe,
@@ -264,7 +306,8 @@ class _ChatScreenState extends State<ChatScreen> {
       appBar: AppBar(
         leadingWidth: 40,
         title: StreamBuilder<UserModel?>(
-          stream: context.read<UserRepository>().watchUser(widget.otherUser.uid),
+          stream:
+              context.read<UserRepository>().watchUser(widget.otherUser.uid),
           builder: (_, snap) {
             final user = snap.data ?? widget.otherUser;
             return Row(
@@ -281,7 +324,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(user.displayName,
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                        style: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w600)),
                     Text(
                       user.isOnline
                           ? 'Online'
@@ -290,7 +334,9 @@ class _ChatScreenState extends State<ChatScreen> {
                               : 'Offline',
                       style: TextStyle(
                         fontSize: 12,
-                        color: user.isOnline ? AppTheme.secondaryColor : AppTheme.subtitleColor,
+                        color: user.isOnline
+                            ? AppTheme.secondaryColor
+                            : AppTheme.subtitleColor,
                       ),
                     ),
                   ],
@@ -310,7 +356,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 final items = _buildItemList(messages, _isOtherUserTyping());
                 return ListView.builder(
                   controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   itemCount: items.length,
                   itemBuilder: (_, i) => items[i],
                 );
@@ -323,18 +370,21 @@ class _ChatScreenState extends State<ChatScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
-                  const Icon(Icons.edit, color: AppTheme.primaryColor, size: 16),
+                  const Icon(Icons.edit,
+                      color: AppTheme.primaryColor, size: 16),
                   const SizedBox(width: 8),
                   const Expanded(
                     child: Text('Editing message',
-                        style: TextStyle(color: AppTheme.primaryColor, fontSize: 13)),
+                        style: TextStyle(
+                            color: AppTheme.primaryColor, fontSize: 13)),
                   ),
                   GestureDetector(
                     onTap: () {
                       setState(() => _editingMessageId = null);
                       _messageController.clear();
                     },
-                    child: const Icon(Icons.close, color: AppTheme.subtitleColor, size: 18),
+                    child: const Icon(Icons.close,
+                        color: AppTheme.subtitleColor, size: 18),
                   ),
                 ],
               ),
@@ -401,8 +451,7 @@ class _MessageBubbleState extends State<_MessageBubble> {
                   bottomRight: Radius.circular(isMe ? 4 : 18),
                 ),
               ),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -418,12 +467,10 @@ class _MessageBubbleState extends State<_MessageBubble> {
                   else if (message.type == AppConstants.textMessage)
                     Text(
                       message.content,
-                      style:
-                          const TextStyle(color: Colors.white, fontSize: 15),
+                      style: const TextStyle(color: Colors.white, fontSize: 15),
                     )
                   else if (message.mediaUrl != null)
-                    _MediaContent(
-                        url: message.mediaUrl!, type: message.type),
+                    _MediaContent(url: message.mediaUrl!, type: message.type),
                   const SizedBox(height: 4),
                   Row(
                     mainAxisSize: MainAxisSize.min,
@@ -444,8 +491,8 @@ class _MessageBubbleState extends State<_MessageBubble> {
             ),
             if (_showTimestamp)
               Padding(
-                padding: const EdgeInsets.only(
-                    top: 2, bottom: 4, left: 4, right: 4),
+                padding:
+                    const EdgeInsets.only(top: 2, bottom: 4, left: 4, right: 4),
                 child: Text(
                   DateFormatter.formatFullDate(message.timestamp),
                   style: const TextStyle(
@@ -469,9 +516,11 @@ class _StatusIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     switch (status) {
       case AppConstants.statusRead:
-        return const Icon(Icons.done_all, size: 14, color: AppTheme.secondaryColor);
+        return const Icon(Icons.done_all,
+            size: 14, color: AppTheme.secondaryColor);
       case AppConstants.statusDelivered:
-        return const Icon(Icons.done_all, size: 14, color: AppTheme.subtitleColor);
+        return const Icon(Icons.done_all,
+            size: 14, color: AppTheme.subtitleColor);
       default:
         return const Icon(Icons.done, size: 14, color: AppTheme.subtitleColor);
     }
@@ -485,56 +534,129 @@ class _MediaContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final signedUrlFuture =
+        context.read<ChatRepository>().createSignedMediaUrl(url);
     if (type == AppConstants.imageMessage) {
-      return GestureDetector(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ImageViewerScreen(imageUrl: url, heroTag: url),
-          ),
-        ),
-        child: Hero(
-          tag: url,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.network(
-              url,
+      return FutureBuilder<String>(
+        future: signedUrlFuture,
+        builder: (context, snapshot) {
+          final signedUrl = snapshot.data;
+          if (signedUrl == null) {
+            return const SizedBox(
               width: 200,
               height: 200,
-              fit: BoxFit.cover,
-              loadingBuilder: (_, child, progress) {
-                if (progress == null) return child;
-                return const SizedBox(
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          return GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) =>
+                    ImageViewerScreen(imageUrl: signedUrl, heroTag: url),
+              ),
+            ),
+            child: Hero(
+              tag: url,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(
+                  signedUrl,
                   width: 200,
                   height: 200,
-                  child: Center(child: CircularProgressIndicator()),
-                );
-              },
-              errorBuilder: (_, __, ___) =>
-                  const Icon(Icons.broken_image, color: Colors.white),
+                  fit: BoxFit.cover,
+                  loadingBuilder: (_, child, progress) {
+                    if (progress == null) return child;
+                    return const SizedBox(
+                      width: 200,
+                      height: 200,
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  },
+                  errorBuilder: (_, __, ___) =>
+                      const Icon(Icons.broken_image, color: Colors.white),
+                ),
+              ),
             ),
-          ),
-        ),
+          );
+        },
       );
     }
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => VideoPlayerScreen(videoUrl: url),
-        ),
-      ),
-      child: Container(
-        width: 200,
-        height: 120,
-        decoration: BoxDecoration(
-          color: Colors.black54,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Center(
-          child: Icon(Icons.play_circle_fill, color: Colors.white, size: 48),
-        ),
-      ),
+    if (type == AppConstants.audioMessage) {
+      return FutureBuilder<String>(
+        future: signedUrlFuture,
+        builder: (context, snapshot) {
+          final signedUrl = snapshot.data;
+          if (signedUrl == null) {
+            return const SizedBox(
+              width: 220,
+              height: 60,
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          return GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) =>
+                    VideoPlayerScreen(videoUrl: signedUrl, isAudio: true),
+              ),
+            ),
+            child: Container(
+              width: 220,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.black26,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.play_circle_fill, color: Colors.white, size: 32),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text('Audio message',
+                        style: TextStyle(color: Colors.white)),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    }
+    return FutureBuilder<String>(
+      future: signedUrlFuture,
+      builder: (context, snapshot) {
+        final signedUrl = snapshot.data;
+        if (signedUrl == null) {
+          return const SizedBox(
+            width: 200,
+            height: 120,
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        return GestureDetector(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => VideoPlayerScreen(videoUrl: signedUrl),
+            ),
+          ),
+          child: Container(
+            width: 200,
+            height: 120,
+            decoration: BoxDecoration(
+              color: Colors.black54,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Center(
+              child:
+                  Icon(Icons.play_circle_fill, color: Colors.white, size: 48),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -678,7 +800,8 @@ class _MessageInput extends StatelessWidget {
         child: Row(
           children: [
             IconButton(
-              icon: const Icon(Icons.attach_file, color: AppTheme.subtitleColor),
+              icon:
+                  const Icon(Icons.attach_file, color: AppTheme.subtitleColor),
               onPressed: onAttach,
             ),
             Expanded(
@@ -696,7 +819,8 @@ class _MessageInput extends StatelessWidget {
                   ),
                   filled: true,
                   fillColor: AppTheme.cardColor,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
                 onChanged: (text) => onTyping(text.isNotEmpty),
                 onSubmitted: (_) => onSend(),
@@ -712,7 +836,8 @@ class _MessageInput extends StatelessWidget {
                   color: AppTheme.primaryColor,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                child: const Icon(Icons.send_rounded,
+                    color: Colors.white, size: 20),
               ),
             ),
           ],

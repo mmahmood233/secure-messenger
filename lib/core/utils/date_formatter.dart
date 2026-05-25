@@ -17,7 +17,9 @@ class DateFormatter {
     final diff = now.difference(time);
 
     if (diff.inDays == 0) return 'Today ${DateFormat('HH:mm').format(time)}';
-    if (diff.inDays == 1) return 'Yesterday ${DateFormat('HH:mm').format(time)}';
+    if (diff.inDays == 1) {
+      return 'Yesterday ${DateFormat('HH:mm').format(time)}';
+    }
     return DateFormat('d MMM y, HH:mm').format(time);
   }
 

@@ -1,17 +1,17 @@
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:secure_messenger/core/constants/app_constants.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import 'package:secure_messenger/core/errors/app_exception.dart';
+import 'package:secure_messenger/core/services/encryption_service.dart';
 import 'package:secure_messenger/data/models/user_model.dart';
 
 class AuthRepository {
-  final FirebaseAuth _auth;
-  final FirebaseFirestore _firestore;
+  final supabase.SupabaseClient _client;
+  final EncryptionService _encryptionService;
 
-  AuthRepository(this._auth, this._firestore);
+  AuthRepository(this._client, this._encryptionService);
 
-  User? get currentUser => _auth.currentUser;
-  Stream<User?> get authStateChanges => _auth.authStateChanges();
+  supabase.User? get currentUser => _client.auth.currentUser;
+  Stream<supabase.AuthState> get authStateChanges =>
+      _client.auth.onAuthStateChange;
 
   Future<UserModel> signUp({
     required String email,
@@ -20,42 +20,46 @@ class AuthRepository {
     required String displayName,
   }) async {
     try {
-      final existing = await _firestore
-          .collection(AppConstants.usersCollection)
-          .where('username', isEqualTo: username.toLowerCase())
-          .limit(1)
-          .get();
+      final existing = await _client
+          .from('profiles')
+          .select('id')
+          .eq('username', username.toLowerCase())
+          .maybeSingle();
 
-      if (existing.docs.isNotEmpty) {
+      if (existing != null) {
         throw const AuthException('Username is already taken.');
       }
 
-      final credential = await _auth.createUserWithEmailAndPassword(
+      final response = await _client.auth.signUp(
         email: email,
         password: password,
       );
+      final authUser = response.user;
+      if (authUser == null) {
+        throw const AuthException(
+          'Account created. Please verify your email, then sign in.',
+        );
+      }
 
+      final publicKey = await _encryptionService.ensureIdentityKeyPair();
       final user = UserModel(
-        uid: credential.user!.uid,
+        uid: authUser.id,
         email: email,
         username: username.toLowerCase(),
         displayName: displayName,
+        publicKey: publicKey,
         isOnline: true,
         createdAt: DateTime.now(),
       );
 
-      await _firestore
-          .collection(AppConstants.usersCollection)
-          .doc(user.uid)
-          .set(user.toMap());
-
+      await _client.from('profiles').upsert(user.toMap());
       return user;
-    } on FirebaseAuthException catch (e) {
-      throw AuthException(mapFirebaseAuthError(e.code), code: e.code);
+    } on supabase.AuthException catch (e) {
+      throw AuthException(mapAuthError(e.message), code: e.statusCode);
     } on AppException {
       rethrow;
     } catch (e) {
-      throw AuthException('Sign up failed. Please try again.');
+      throw AuthException('Sign up failed. Please try again. $e');
     }
   }
 
@@ -64,68 +68,69 @@ class AuthRepository {
     required String password,
   }) async {
     try {
-      final credential = await _auth.signInWithEmailAndPassword(
+      final response = await _client.auth.signInWithPassword(
         email: email,
         password: password,
       );
-
-      await _updateOnlineStatus(credential.user!.uid, true);
-
-      final doc = await _firestore
-          .collection(AppConstants.usersCollection)
-          .doc(credential.user!.uid)
-          .get();
-
-      if (!doc.exists) {
-        throw const AuthException('User profile not found.');
+      final authUser = response.user;
+      if (authUser == null) {
+        throw const AuthException('Invalid credentials.');
       }
 
-      return UserModel.fromDoc(doc);
-    } on FirebaseAuthException catch (e) {
-      throw AuthException(mapFirebaseAuthError(e.code), code: e.code);
+      await updateOnlineStatus(authUser.id, true);
+      final profile = await getCurrentUserProfile();
+      if (profile == null) {
+        throw const AuthException('User profile not found.');
+      }
+      return _ensurePublicKey(profile);
+    } on supabase.AuthException catch (e) {
+      throw AuthException(mapAuthError(e.message), code: e.statusCode);
     } on AppException {
       rethrow;
     } catch (e) {
-      throw AuthException('Sign in failed. Please try again.');
+      throw AuthException('Sign in failed. Please try again. $e');
     }
   }
 
   Future<void> signOut() async {
     try {
-      final uid = _auth.currentUser?.uid;
+      final uid = _client.auth.currentUser?.id;
       if (uid != null) {
-        await _updateOnlineStatus(uid, false);
+        await updateOnlineStatus(uid, false);
       }
-      await _auth.signOut();
-    } catch (e) {
-      throw AuthException('Sign out failed.');
+      await _client.auth.signOut();
+    } catch (_) {
+      throw const AuthException('Sign out failed.');
     }
   }
 
   Future<UserModel?> getCurrentUserProfile() async {
     try {
-      final uid = _auth.currentUser?.uid;
+      final uid = _client.auth.currentUser?.id;
       if (uid == null) return null;
 
-      final doc = await _firestore
-          .collection(AppConstants.usersCollection)
-          .doc(uid)
-          .get();
-
-      if (!doc.exists) return null;
-      return UserModel.fromDoc(doc);
-    } catch (e) {
+      final data =
+          await _client.from('profiles').select().eq('id', uid).maybeSingle();
+      if (data == null) return null;
+      return UserModel.fromSupabase(data);
+    } catch (_) {
       return null;
     }
   }
 
-  Future<void> _updateOnlineStatus(String uid, bool isOnline) async {
-    await _firestore
-        .collection(AppConstants.usersCollection)
-        .doc(uid)
-        .set({
-      'isOnline': isOnline,
-      'lastSeen': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+  Future<void> updateOnlineStatus(String uid, bool isOnline) async {
+    await _client.from('profiles').update({
+      'is_online': isOnline,
+      'last_seen': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', uid);
+  }
+
+  Future<UserModel> _ensurePublicKey(UserModel user) async {
+    final publicKey = await _encryptionService.ensureIdentityKeyPair();
+    if (user.publicKey == publicKey) return user;
+    await _client
+        .from('profiles')
+        .update({'public_key': publicKey}).eq('id', user.uid);
+    return user.copyWith(publicKey: publicKey);
   }
 }

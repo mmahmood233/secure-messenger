@@ -23,7 +23,8 @@ class _SearchScreenState extends State<SearchScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _focusNode.requestFocus());
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _focusNode.requestFocus());
   }
 
   @override
@@ -111,9 +112,8 @@ class _SearchScreenState extends State<SearchScreen> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final results = contacts.searchResults
-              .where((u) => u.uid != currentUid)
-              .toList();
+          final results =
+              contacts.searchResults.where((u) => u.uid != currentUid).toList();
 
           if (results.isEmpty) {
             return Center(

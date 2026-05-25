@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:timeago/timeago.dart' as timeago;
@@ -24,7 +27,8 @@ class SecretChatScreen extends StatefulWidget {
   final ChatModel chat;
   final UserModel otherUser;
 
-  const SecretChatScreen({super.key, required this.chat, required this.otherUser});
+  const SecretChatScreen(
+      {super.key, required this.chat, required this.otherUser});
 
   @override
   State<SecretChatScreen> createState() => _SecretChatScreenState();
@@ -126,6 +130,19 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
     );
   }
 
+  Future<void> _pickAndSendAudio() async {
+    final uid = context.read<AuthProvider>().currentUser!.uid;
+    final picked = await FilePicker.platform.pickFiles(type: FileType.audio);
+    final path = picked?.files.single.path;
+    if (path == null) return;
+    await _messageProvider.sendMediaMessage(
+      chatId: widget.chat.id,
+      senderId: uid,
+      file: File(path),
+      type: AppConstants.audioMessage,
+    );
+  }
+
   void _showMediaOptions() {
     showModalBottomSheet(
       context: context,
@@ -140,27 +157,46 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: const Icon(Icons.photo_library_outlined, color: AppTheme.secretChatColor),
-                title: const Text('Photo from Gallery', style: TextStyle(color: Colors.white)),
+                leading: const Icon(Icons.photo_library_outlined,
+                    color: AppTheme.secretChatColor),
+                title: const Text('Photo from Gallery',
+                    style: TextStyle(color: Colors.white)),
                 onTap: () {
                   Navigator.pop(context);
-                  _pickAndSendMedia(ImageSource.gallery, AppConstants.imageMessage);
+                  _pickAndSendMedia(
+                      ImageSource.gallery, AppConstants.imageMessage);
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.camera_alt_outlined, color: AppTheme.secretChatColor),
-                title: const Text('Take Photo', style: TextStyle(color: Colors.white)),
+                leading: const Icon(Icons.camera_alt_outlined,
+                    color: AppTheme.secretChatColor),
+                title: const Text('Take Photo',
+                    style: TextStyle(color: Colors.white)),
                 onTap: () {
                   Navigator.pop(context);
-                  _pickAndSendMedia(ImageSource.camera, AppConstants.imageMessage);
+                  _pickAndSendMedia(
+                      ImageSource.camera, AppConstants.imageMessage);
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.videocam_outlined, color: AppTheme.secretChatColor),
-                title: const Text('Video from Gallery', style: TextStyle(color: Colors.white)),
+                leading: const Icon(Icons.videocam_outlined,
+                    color: AppTheme.secretChatColor),
+                title: const Text('Video from Gallery',
+                    style: TextStyle(color: Colors.white)),
                 onTap: () {
                   Navigator.pop(context);
-                  _pickAndSendMedia(ImageSource.gallery, AppConstants.videoMessage);
+                  _pickAndSendMedia(
+                      ImageSource.gallery, AppConstants.videoMessage);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.audiotrack_outlined,
+                    color: AppTheme.secretChatColor),
+                title: const Text('Audio File',
+                    style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickAndSendAudio();
                 },
               ),
             ],
@@ -184,8 +220,10 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
           children: [
             if (message.type == AppConstants.textMessage)
               ListTile(
-                leading: const Icon(Icons.copy_outlined, color: AppTheme.subtitleColor),
-                title: const Text('Copy Text', style: TextStyle(color: Colors.white)),
+                leading: const Icon(Icons.copy_outlined,
+                    color: AppTheme.subtitleColor),
+                title: const Text('Copy Text',
+                    style: TextStyle(color: Colors.white)),
                 onTap: () {
                   Navigator.pop(context);
                   Clipboard.setData(ClipboardData(text: message.content));
@@ -198,10 +236,13 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
                   );
                 },
               ),
-            if (message.senderId == currentUid && message.type == AppConstants.textMessage)
+            if (message.senderId == currentUid &&
+                message.type == AppConstants.textMessage)
               ListTile(
-                leading: const Icon(Icons.edit_outlined, color: AppTheme.secretChatColor),
-                title: const Text('Edit Message', style: TextStyle(color: Colors.white)),
+                leading: const Icon(Icons.edit_outlined,
+                    color: AppTheme.secretChatColor),
+                title: const Text('Edit Message',
+                    style: TextStyle(color: Colors.white)),
                 onTap: () {
                   Navigator.pop(context);
                   setState(() {
@@ -212,8 +253,10 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
               ),
             if (message.senderId == currentUid)
               ListTile(
-                leading: const Icon(Icons.delete_outline, color: AppTheme.errorColor),
-                title: const Text('Delete Message', style: TextStyle(color: AppTheme.errorColor)),
+                leading: const Icon(Icons.delete_outline,
+                    color: AppTheme.errorColor),
+                title: const Text('Delete Message',
+                    style: TextStyle(color: AppTheme.errorColor)),
                 onTap: () {
                   Navigator.pop(context);
                   _messageProvider.deleteMessage(
@@ -232,11 +275,13 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
     return _messageProvider.typingUsers.values.any((v) => v);
   }
 
-  List<Widget> _buildItemList(List<MessageModel> messages, bool showTyping, String currentUid) {
+  List<Widget> _buildItemList(
+      List<MessageModel> messages, bool showTyping, String currentUid) {
     final items = <Widget>[];
     DateTime? lastDate;
     for (final msg in messages) {
-      final msgDate = DateTime(msg.timestamp.year, msg.timestamp.month, msg.timestamp.day);
+      final msgDate =
+          DateTime(msg.timestamp.year, msg.timestamp.month, msg.timestamp.day);
       if (lastDate == null || msgDate != lastDate) {
         items.add(_SecretDateSeparator(
           label: DateFormatter.formatDateSeparator(msg.timestamp),
@@ -246,6 +291,7 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
       items.add(_SecretMessageBubble(
         message: msg,
         isMe: msg.senderId == currentUid,
+        chatId: widget.chat.id,
         onLongPress: () => _showMessageOptions(msg, currentUid),
       ));
     }
@@ -262,7 +308,8 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
         backgroundColor: AppTheme.secretChatColor.withOpacity(0.15),
         leadingWidth: 40,
         title: StreamBuilder<UserModel?>(
-          stream: context.read<UserRepository>().watchUser(widget.otherUser.uid),
+          stream:
+              context.read<UserRepository>().watchUser(widget.otherUser.uid),
           builder: (_, snap) {
             final user = snap.data ?? widget.otherUser;
             return Row(
@@ -281,9 +328,11 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
                     Row(
                       children: [
                         Text(user.displayName,
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                            style: const TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.w600)),
                         const SizedBox(width: 6),
-                        const Icon(Icons.lock, size: 14, color: AppTheme.secretChatColor),
+                        const Icon(Icons.lock,
+                            size: 14, color: AppTheme.secretChatColor),
                       ],
                     ),
                     Text(
@@ -292,7 +341,8 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
                           : user.lastSeen != null
                               ? 'last seen ${timeago.format(user.lastSeen!)} · 🔒'
                               : 'Secret Chat · E2E Encrypted',
-                      style: const TextStyle(fontSize: 11, color: AppTheme.secretChatColor),
+                      style: const TextStyle(
+                          fontSize: 11, color: AppTheme.secretChatColor),
                     ),
                   ],
                 ),
@@ -314,7 +364,8 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
                 SizedBox(width: 6),
                 Text(
                   'Messages are end-to-end encrypted',
-                  style: TextStyle(color: AppTheme.secretChatColor, fontSize: 12),
+                  style:
+                      TextStyle(color: AppTheme.secretChatColor, fontSize: 12),
                 ),
               ],
             ),
@@ -324,10 +375,12 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
               animation: _messageProvider,
               builder: (_, __) {
                 final messages = _messageProvider.messages;
-                final items = _buildItemList(messages, _isOtherUserTyping(), currentUid);
+                final items =
+                    _buildItemList(messages, _isOtherUserTyping(), currentUid);
                 return ListView.builder(
                   controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   itemCount: items.length,
                   itemBuilder: (_, i) => items[i],
                 );
@@ -340,18 +393,21 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
-                  const Icon(Icons.edit, color: AppTheme.secretChatColor, size: 16),
+                  const Icon(Icons.edit,
+                      color: AppTheme.secretChatColor, size: 16),
                   const SizedBox(width: 8),
                   const Expanded(
                     child: Text('Editing message',
-                        style: TextStyle(color: AppTheme.secretChatColor, fontSize: 13)),
+                        style: TextStyle(
+                            color: AppTheme.secretChatColor, fontSize: 13)),
                   ),
                   GestureDetector(
                     onTap: () {
                       setState(() => _editingMessageId = null);
                       _messageController.clear();
                     },
-                    child: const Icon(Icons.close, color: AppTheme.subtitleColor, size: 18),
+                    child: const Icon(Icons.close,
+                        color: AppTheme.subtitleColor, size: 18),
                   ),
                 ],
               ),
@@ -374,11 +430,13 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
 class _SecretMessageBubble extends StatelessWidget {
   final MessageModel message;
   final bool isMe;
+  final String chatId;
   final VoidCallback onLongPress;
 
   const _SecretMessageBubble({
     required this.message,
     required this.isMe,
+    required this.chatId,
     required this.onLongPress,
   });
 
@@ -417,10 +475,27 @@ class _SecretMessageBubble extends StatelessWidget {
                     fontSize: 14,
                   ),
                 )
-              else if (message.type == AppConstants.imageMessage && message.mediaUrl != null)
-                _SecretMediaContent(url: message.mediaUrl!, type: AppConstants.imageMessage)
-              else if (message.type == AppConstants.videoMessage && message.mediaUrl != null)
-                _SecretMediaContent(url: message.mediaUrl!, type: AppConstants.videoMessage)
+              else if (message.type == AppConstants.imageMessage &&
+                  message.mediaUrl != null)
+                _SecretMediaContent(
+                  url: message.mediaUrl!,
+                  type: AppConstants.imageMessage,
+                  chatId: chatId,
+                )
+              else if (message.type == AppConstants.videoMessage &&
+                  message.mediaUrl != null)
+                _SecretMediaContent(
+                  url: message.mediaUrl!,
+                  type: AppConstants.videoMessage,
+                  chatId: chatId,
+                )
+              else if (message.type == AppConstants.audioMessage &&
+                  message.mediaUrl != null)
+                _SecretMediaContent(
+                  url: message.mediaUrl!,
+                  type: AppConstants.audioMessage,
+                  chatId: chatId,
+                )
               else
                 Text(
                   message.content,
@@ -430,16 +505,19 @@ class _SecretMessageBubble extends StatelessWidget {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.lock, size: 10, color: AppTheme.subtitleColor),
+                  const Icon(Icons.lock,
+                      size: 10, color: AppTheme.subtitleColor),
                   const SizedBox(width: 3),
                   if (message.isEdited && !message.isDeleted)
                     const Text(
                       'edited · ',
-                      style: TextStyle(color: AppTheme.subtitleColor, fontSize: 10),
+                      style: TextStyle(
+                          color: AppTheme.subtitleColor, fontSize: 10),
                     ),
                   Text(
                     DateFormat('HH:mm').format(message.timestamp),
-                    style: const TextStyle(color: AppTheme.subtitleColor, fontSize: 11),
+                    style: const TextStyle(
+                        color: AppTheme.subtitleColor, fontSize: 11),
                   ),
                   if (isMe) ...[
                     const SizedBox(width: 4),
@@ -463,9 +541,11 @@ class _StatusIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     switch (status) {
       case AppConstants.statusRead:
-        return const Icon(Icons.done_all, size: 14, color: AppTheme.secondaryColor);
+        return const Icon(Icons.done_all,
+            size: 14, color: AppTheme.secondaryColor);
       case AppConstants.statusDelivered:
-        return const Icon(Icons.done_all, size: 14, color: AppTheme.subtitleColor);
+        return const Icon(Icons.done_all,
+            size: 14, color: AppTheme.subtitleColor);
       default:
         return const Icon(Icons.done, size: 14, color: AppTheme.subtitleColor);
     }
@@ -475,59 +555,205 @@ class _StatusIcon extends StatelessWidget {
 class _SecretMediaContent extends StatelessWidget {
   final String url;
   final String type;
-  const _SecretMediaContent({required this.url, required this.type});
+  final String chatId;
+  const _SecretMediaContent({
+    required this.url,
+    required this.type,
+    required this.chatId,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final mediaFuture = _decryptMedia(context);
     if (type == AppConstants.imageMessage) {
-      return GestureDetector(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ImageViewerScreen(imageUrl: url, heroTag: 'secret_$url'),
-          ),
-        ),
-        child: Hero(
-          tag: 'secret_$url',
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.network(
-              url,
+      return FutureBuilder<Uint8List>(
+        future: mediaFuture,
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return _SecretMediaError(
               width: 200,
               height: 200,
-              fit: BoxFit.cover,
-              loadingBuilder: (_, child, progress) {
-                if (progress == null) return child;
-                return const SizedBox(
+              label: 'Unable to decrypt image',
+            );
+          }
+          if (!snapshot.hasData) {
+            return const SizedBox(
+              width: 200,
+              height: 200,
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          final bytes = snapshot.data!;
+          return GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ImageViewerScreen.bytes(
+                  imageBytes: bytes,
+                  heroTag: 'secret_$url',
+                ),
+              ),
+            ),
+            child: Hero(
+              tag: 'secret_$url',
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.memory(
+                  bytes,
                   width: 200,
                   height: 200,
-                  child: Center(child: CircularProgressIndicator()),
-                );
-              },
-              errorBuilder: (_, __, ___) =>
-                  const Icon(Icons.broken_image, color: Colors.white),
+                  fit: BoxFit.cover,
+                ),
+              ),
             ),
-          ),
-        ),
+          );
+        },
       );
     }
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => VideoPlayerScreen(videoUrl: url),
-        ),
+    if (type == AppConstants.audioMessage) {
+      return FutureBuilder<File>(
+        future: _decryptMediaFile(context),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return _SecretMediaError(
+              width: 220,
+              height: 60,
+              label: 'Unable to decrypt audio',
+            );
+          }
+          if (!snapshot.hasData) {
+            return const SizedBox(
+              width: 220,
+              height: 60,
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          return GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => VideoPlayerScreen.file(
+                  file: snapshot.data!,
+                  isAudio: true,
+                ),
+              ),
+            ),
+            child: Container(
+              width: 220,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.black26,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.play_circle_fill, color: Colors.white, size: 32),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text('Encrypted audio',
+                        style: TextStyle(color: Colors.white)),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    }
+    return FutureBuilder<File>(
+      future: _decryptMediaFile(context),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return _SecretMediaError(
+            width: 200,
+            height: 120,
+            label: 'Unable to decrypt video',
+          );
+        }
+        if (!snapshot.hasData) {
+          return const SizedBox(
+            width: 200,
+            height: 120,
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        return GestureDetector(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => VideoPlayerScreen.file(file: snapshot.data!),
+            ),
+          ),
+          child: Container(
+            width: 200,
+            height: 120,
+            decoration: BoxDecoration(
+              color: Colors.black54,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Center(
+              child:
+                  Icon(Icons.play_circle_fill, color: Colors.white, size: 48),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<Uint8List> _decryptMedia(BuildContext context) async {
+    final encryptionService = context.read<EncryptionService>();
+    final chatRepository = context.read<ChatRepository>();
+    final data = await chatRepository.downloadMediaBytes(url);
+    final payload = utf8.decode(data);
+    return encryptionService.decryptBytesForChat(payload, chatId);
+  }
+
+  Future<File> _decryptMediaFile(BuildContext context) async {
+    final bytes = await _decryptMedia(context);
+    final directory = await getTemporaryDirectory();
+    final extension = type == AppConstants.audioMessage ? 'm4a' : 'mp4';
+    final file = File('${directory.path}/secret_${url.hashCode}.$extension');
+    if (!await file.exists()) {
+      await file.writeAsBytes(bytes, flush: true);
+    }
+    return file;
+  }
+}
+
+class _SecretMediaError extends StatelessWidget {
+  final double width;
+  final double height;
+  final String label;
+
+  const _SecretMediaError({
+    required this.width,
+    required this.height,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.black26,
+        borderRadius: BorderRadius.circular(8),
       ),
-      child: Container(
-        width: 200,
-        height: 120,
-        decoration: BoxDecoration(
-          color: Colors.black54,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Center(
-          child: Icon(Icons.play_circle_fill, color: Colors.white, size: 48),
-        ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.lock_outline, color: AppTheme.errorColor),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white70, fontSize: 12),
+          ),
+        ],
       ),
     );
   }
@@ -674,7 +900,8 @@ class _SecretMessageInput extends StatelessWidget {
         child: Row(
           children: [
             IconButton(
-              icon: const Icon(Icons.attach_file, color: AppTheme.subtitleColor),
+              icon:
+                  const Icon(Icons.attach_file, color: AppTheme.subtitleColor),
               onPressed: onAttach,
             ),
             Expanded(
@@ -692,7 +919,8 @@ class _SecretMessageInput extends StatelessWidget {
                   ),
                   filled: true,
                   fillColor: AppTheme.cardColor,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
                 onChanged: (text) => onTyping(text.isNotEmpty),
                 onSubmitted: (_) => onSend(),
@@ -708,7 +936,8 @@ class _SecretMessageInput extends StatelessWidget {
                   color: AppTheme.secretChatColor,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                child: const Icon(Icons.send_rounded,
+                    color: Colors.white, size: 20),
               ),
             ),
           ],

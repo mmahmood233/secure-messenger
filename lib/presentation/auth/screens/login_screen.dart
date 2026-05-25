@@ -41,7 +41,8 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!auth.biometricEnabled) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Biometric login is not enabled. Please sign in with email first.'),
+          content: Text(
+              'Biometric login is not enabled. Please sign in with email first.'),
         ),
       );
       return;
@@ -134,12 +135,16 @@ class _LoginScreenState extends State<LoginScreen> {
                               : Icons.visibility_off_outlined,
                           color: AppTheme.subtitleColor,
                         ),
-                        onPressed: () =>
-                            setState(() => _obscurePassword = !_obscurePassword),
+                        onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword),
                       ),
                       validator: (v) {
-                        if (v == null || v.isEmpty) return 'Password is required';
-                        if (v.length < 6) return 'Password must be at least 6 characters';
+                        if (v == null || v.isEmpty) {
+                          return 'Password is required';
+                        }
+                        if (v.length < 6) {
+                          return 'Password must be at least 6 characters';
+                        }
                         return null;
                       },
                     ),

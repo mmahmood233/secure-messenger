@@ -24,27 +24,24 @@ class EncryptionException extends AppException {
   const EncryptionException(super.message, {super.code});
 }
 
-String mapFirebaseAuthError(String code) {
-  switch (code) {
-    case 'user-not-found':
-      return 'No account found with this email.';
-    case 'wrong-password':
-      return 'Incorrect password. Please try again.';
-    case 'email-already-in-use':
-      return 'An account already exists with this email.';
-    case 'weak-password':
-      return 'Password is too weak. Use at least 6 characters.';
-    case 'invalid-email':
-      return 'Please enter a valid email address.';
-    case 'too-many-requests':
-      return 'Too many attempts. Please try again later.';
-    case 'network-request-failed':
-      return 'Network error. Please check your connection.';
-    case 'user-disabled':
-      return 'This account has been disabled.';
-    case 'invalid-credential':
-      return 'Invalid credentials. Please check your email and password.';
-    default:
-      return 'An unexpected error occurred. Please try again.';
+String mapAuthError(String message) {
+  final normalized = message.toLowerCase();
+  if (normalized.contains('invalid login') ||
+      normalized.contains('invalid credentials')) {
+    return 'Invalid credentials. Please check your email and password.';
   }
+  if (normalized.contains('already registered') ||
+      normalized.contains('already exists')) {
+    return 'An account already exists with this email.';
+  }
+  if (normalized.contains('email')) {
+    return 'Please enter a valid email address.';
+  }
+  if (normalized.contains('password')) {
+    return 'Password is too weak. Use at least 6 characters.';
+  }
+  if (normalized.contains('network')) {
+    return 'Network error. Please check your connection.';
+  }
+  return 'Authentication failed. Please try again.';
 }

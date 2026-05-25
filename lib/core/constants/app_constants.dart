@@ -1,7 +1,7 @@
 class AppConstants {
   static const String appName = 'SecureMessenger';
 
-  // Firestore collections
+  // Supabase tables
   static const String usersCollection = 'users';
   static const String chatsCollection = 'chats';
   static const String messagesCollection = 'messages';
@@ -11,13 +11,17 @@ class AppConstants {
 
   // Secure storage keys
   static const String biometricEnabledKey = 'biometric_enabled';
+  static const String biometricEmailKey = 'biometric_email';
+  static const String biometricPasswordKey = 'biometric_password';
+  static const String identityPrivateKey = 'identity_private_key';
+  static const String identityPublicKey = 'identity_public_key';
   static const String secretKeyPrefix = 'secret_key_';
-  static const String ivPrefix = 'iv_';
 
   // Message types
   static const String textMessage = 'text';
   static const String imageMessage = 'image';
   static const String videoMessage = 'video';
+  static const String audioMessage = 'audio';
 
   // Message status
   static const String statusSent = 'sent';

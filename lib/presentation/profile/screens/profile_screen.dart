@@ -31,7 +31,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     final user = context.read<AuthProvider>().currentUser;
-    _displayNameController = TextEditingController(text: user?.displayName ?? '');
+    _displayNameController =
+        TextEditingController(text: user?.displayName ?? '');
     _usernameController = TextEditingController(text: user?.username ?? '');
     _bioController = TextEditingController(text: user?.bio ?? '');
     _phoneController = TextEditingController(text: user?.phoneNumber ?? '');
@@ -160,32 +161,76 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   void _showBiometricSettings() {
     final auth = context.read<AuthProvider>();
+    final passwordController = TextEditingController();
+    bool obscurePassword = true;
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppTheme.cardColor,
-        title: const Text('Biometric Login', style: TextStyle(color: Colors.white)),
+        title: const Text('Biometric Login',
+            style: TextStyle(color: Colors.white)),
         content: StatefulBuilder(
           builder: (ctx, setState) {
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text(
-                  'Enable biometric authentication to log in with fingerprint or face recognition.',
+                  'Enable biometric authentication to unlock the app and sign in on this device.',
                   style: TextStyle(color: AppTheme.subtitleColor),
                 ),
                 const SizedBox(height: 16),
-                SwitchListTile(
-                  title: const Text('Enable Biometrics', style: TextStyle(color: Colors.white)),
-                  value: auth.biometricEnabled,
-                  onChanged: auth.biometricAvailable
-                      ? (val) async {
-                          await auth.toggleBiometric(val);
+                if (auth.biometricEnabled)
+                  SwitchListTile(
+                    title: const Text('Enabled',
+                        style: TextStyle(color: Colors.white)),
+                    value: true,
+                    onChanged: auth.biometricAvailable
+                        ? (val) async {
+                            if (!val) {
+                              await auth.disableBiometricLogin();
+                              setState(() {});
+                            }
+                          }
+                        : null,
+                    activeColor: AppTheme.primaryColor,
+                  )
+                else if (auth.biometricAvailable) ...[
+                  TextField(
+                    controller: passwordController,
+                    obscureText: obscurePassword,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Confirm password',
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          obscurePassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                        ),
+                        onPressed: () {
+                          setState(() => obscurePassword = !obscurePassword);
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.fingerprint),
+                      label: const Text('Enable Biometrics'),
+                      onPressed: () async {
+                        final success = await auth.enableBiometricLogin(
+                          passwordController.text,
+                        );
+                        if (success) {
                           setState(() {});
                         }
-                      : null,
-                  activeColor: AppTheme.primaryColor,
-                ),
+                      },
+                    ),
+                  ),
+                ],
                 if (!auth.biometricAvailable)
                   const Text(
                     'Biometric authentication is not available on this device.',
@@ -197,7 +242,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              passwordController.dispose();
+              Navigator.pop(context);
+            },
             child: const Text('Done'),
           ),
         ],
@@ -262,7 +310,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   width: 2,
                                 ),
                               ),
-                              child: const Icon(Icons.camera_alt, size: 16, color: Colors.white),
+                              child: const Icon(Icons.camera_alt,
+                                  size: 16, color: Colors.white),
                             ),
                           ),
                       ],
@@ -291,15 +340,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Text(
                         user.bio!,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(color: AppTheme.subtitleColor, fontSize: 14),
+                        style: const TextStyle(
+                            color: AppTheme.subtitleColor, fontSize: 14),
                       ),
                     ],
                     const SizedBox(height: 24),
                     _InfoCard(
                       items: [
-                        _InfoItem(icon: Icons.email_outlined, label: 'Email', value: user.email),
-                        if (user.phoneNumber != null && user.phoneNumber!.isNotEmpty)
-                          _InfoItem(icon: Icons.phone_outlined, label: 'Phone', value: user.phoneNumber!),
+                        _InfoItem(
+                            icon: Icons.email_outlined,
+                            label: 'Email',
+                            value: user.email),
+                        if (user.phoneNumber != null &&
+                            user.phoneNumber!.isNotEmpty)
+                          _InfoItem(
+                              icon: Icons.phone_outlined,
+                              label: 'Phone',
+                              value: user.phoneNumber!),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -332,7 +389,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           context: context,
                           builder: (_) => AlertDialog(
                             backgroundColor: AppTheme.cardColor,
-                            title: const Text('Sign Out', style: TextStyle(color: Colors.white)),
+                            title: const Text('Sign Out',
+                                style: TextStyle(color: Colors.white)),
                             content: const Text(
                               'Are you sure you want to sign out?',
                               style: TextStyle(color: AppTheme.subtitleColor),
@@ -344,7 +402,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                               TextButton(
                                 onPressed: () => Navigator.pop(context, true),
-                                child: const Text('Sign Out', style: TextStyle(color: AppTheme.errorColor)),
+                                child: const Text('Sign Out',
+                                    style:
+                                        TextStyle(color: AppTheme.errorColor)),
                               ),
                             ],
                           ),
@@ -360,7 +420,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       controller: _displayNameController,
                       label: 'Display Name',
                       prefixIcon: Icons.person_outline,
-                      validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                      validator: (v) =>
+                          v == null || v.trim().isEmpty ? 'Required' : null,
                     ),
                     const SizedBox(height: 14),
                     AppTextField(
@@ -426,14 +487,17 @@ class _InfoCard extends StatelessWidget {
           return Column(
             children: [
               ListTile(
-                leading: Icon(entry.value.icon, color: AppTheme.primaryColor, size: 20),
+                leading: Icon(entry.value.icon,
+                    color: AppTheme.primaryColor, size: 20),
                 title: Text(entry.value.label,
-                    style: const TextStyle(color: AppTheme.subtitleColor, fontSize: 12)),
+                    style: const TextStyle(
+                        color: AppTheme.subtitleColor, fontSize: 12)),
                 subtitle: Text(entry.value.value,
                     style: const TextStyle(color: Colors.white, fontSize: 15)),
               ),
               if (!isLast)
-                const Divider(height: 1, color: AppTheme.dividerColor, indent: 56),
+                const Divider(
+                    height: 1, color: AppTheme.dividerColor, indent: 56),
             ],
           );
         }).toList(),
@@ -446,7 +510,8 @@ class _InfoItem {
   final IconData icon;
   final String label;
   final String value;
-  const _InfoItem({required this.icon, required this.label, required this.value});
+  const _InfoItem(
+      {required this.icon, required this.label, required this.value});
 }
 
 class _ActionCard extends StatelessWidget {
@@ -479,7 +544,8 @@ class _ActionCard extends StatelessWidget {
           children: [
             Icon(icon, color: c, size: 20),
             const SizedBox(width: 8),
-            Text(label, style: TextStyle(color: c, fontWeight: FontWeight.w600)),
+            Text(label,
+                style: TextStyle(color: c, fontWeight: FontWeight.w600)),
           ],
         ),
       ),
