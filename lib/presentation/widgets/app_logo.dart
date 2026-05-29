@@ -13,19 +13,7 @@ class AppLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final mark = Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: AppTheme.primaryColor,
-        borderRadius: BorderRadius.circular(size * 0.28),
-      ),
-      child: Icon(
-        Icons.lock_rounded,
-        color: Colors.white,
-        size: size * 0.55,
-      ),
-    );
+    final mark = _LogoMark(size: size);
 
     if (!showWordmark) return mark;
 
@@ -43,6 +31,29 @@ class AppLogo extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _LogoMark extends StatelessWidget {
+  final double size;
+
+  const _LogoMark({required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: AppTheme.primaryColor,
+        borderRadius: BorderRadius.circular(size * 0.28),
+      ),
+      child: Icon(
+        Icons.lock_rounded,
+        color: Colors.white,
+        size: size * 0.55,
+      ),
     );
   }
 }

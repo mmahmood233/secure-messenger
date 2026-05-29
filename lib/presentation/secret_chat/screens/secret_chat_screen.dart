@@ -299,18 +299,24 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
           DateTime(msg.timestamp.year, msg.timestamp.month, msg.timestamp.day);
       if (lastDate == null || msgDate != lastDate) {
         items.add(_SecretDateSeparator(
+          key: ValueKey('secret_date_${msgDate.toIso8601String()}'),
           label: DateFormatter.formatDateSeparator(msg.timestamp),
         ));
         lastDate = msgDate;
       }
       items.add(_SecretMessageBubble(
+        key: ValueKey('secret_message_${msg.id}'),
         message: msg,
         isMe: msg.senderId == currentUid,
         chatId: widget.chat.id,
         onLongPress: () => _showMessageOptions(msg, currentUid),
       ));
     }
-    if (showTyping) items.add(const _SecretTypingIndicator());
+    if (showTyping) {
+      items.add(
+        const _SecretTypingIndicator(key: ValueKey('secret_typing_indicator')),
+      );
+    }
     return items;
   }
 
@@ -463,6 +469,7 @@ class _SecretMessageBubble extends StatelessWidget {
   final VoidCallback onLongPress;
 
   const _SecretMessageBubble({
+    super.key,
     required this.message,
     required this.isMe,
     required this.chatId,
@@ -508,6 +515,7 @@ class _SecretMessageBubble extends StatelessWidget {
               else if (message.type == AppConstants.imageMessage &&
                   message.mediaUrl != null)
                 _SecretMediaContent(
+                  key: ValueKey('secret_media_${message.id}'),
                   url: message.mediaUrl!,
                   type: AppConstants.imageMessage,
                   chatId: chatId,
@@ -515,6 +523,7 @@ class _SecretMessageBubble extends StatelessWidget {
               else if (message.type == AppConstants.videoMessage &&
                   message.mediaUrl != null)
                 _SecretMediaContent(
+                  key: ValueKey('secret_media_${message.id}'),
                   url: message.mediaUrl!,
                   type: AppConstants.videoMessage,
                   chatId: chatId,
@@ -522,6 +531,7 @@ class _SecretMessageBubble extends StatelessWidget {
               else if (message.type == AppConstants.audioMessage &&
                   message.mediaUrl != null)
                 _SecretMediaContent(
+                  key: ValueKey('secret_media_${message.id}'),
                   url: message.mediaUrl!,
                   type: AppConstants.audioMessage,
                   chatId: chatId,
@@ -589,22 +599,57 @@ class _StatusIcon extends StatelessWidget {
   }
 }
 
-class _SecretMediaContent extends StatelessWidget {
+class _SecretMediaContent extends StatefulWidget {
   final String url;
   final String type;
   final String chatId;
+
   const _SecretMediaContent({
+    super.key,
     required this.url,
     required this.type,
     required this.chatId,
   });
 
   @override
+  State<_SecretMediaContent> createState() => _SecretMediaContentState();
+}
+
+class _SecretMediaContentState extends State<_SecretMediaContent>
+    with AutomaticKeepAliveClientMixin {
+  late Future<Uint8List> _mediaFuture;
+  late Future<File> _mediaFileFuture;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _createFutures();
+  }
+
+  @override
+  void didUpdateWidget(covariant _SecretMediaContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.url != widget.url ||
+        oldWidget.type != widget.type ||
+        oldWidget.chatId != widget.chatId) {
+      _createFutures();
+    }
+  }
+
+  void _createFutures() {
+    _mediaFuture = _decryptMedia();
+    _mediaFileFuture = _decryptMediaFile();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final mediaFuture = _decryptMedia(context);
-    if (type == AppConstants.imageMessage) {
+    super.build(context);
+    if (widget.type == AppConstants.imageMessage) {
       return FutureBuilder<Uint8List>(
-        future: mediaFuture,
+        future: _mediaFuture,
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return _SecretMediaError(
@@ -627,12 +672,12 @@ class _SecretMediaContent extends StatelessWidget {
               MaterialPageRoute(
                 builder: (_) => ImageViewerScreen.bytes(
                   imageBytes: bytes,
-                  heroTag: 'secret_$url',
+                  heroTag: 'secret_${widget.url}',
                 ),
               ),
             ),
             child: Hero(
-              tag: 'secret_$url',
+              tag: 'secret_${widget.url}',
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: Image.memory(
@@ -647,9 +692,9 @@ class _SecretMediaContent extends StatelessWidget {
         },
       );
     }
-    if (type == AppConstants.audioMessage) {
+    if (widget.type == AppConstants.audioMessage) {
       return FutureBuilder<File>(
-        future: _decryptMediaFile(context),
+        future: _mediaFileFuture,
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return _SecretMediaError(
@@ -699,7 +744,7 @@ class _SecretMediaContent extends StatelessWidget {
       );
     }
     return FutureBuilder<File>(
-      future: _decryptMediaFile(context),
+      future: _mediaFileFuture,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return _SecretMediaError(
@@ -739,19 +784,20 @@ class _SecretMediaContent extends StatelessWidget {
     );
   }
 
-  Future<Uint8List> _decryptMedia(BuildContext context) async {
+  Future<Uint8List> _decryptMedia() async {
     final encryptionService = context.read<EncryptionService>();
     final chatRepository = context.read<ChatRepository>();
-    final data = await chatRepository.downloadMediaBytes(url);
+    final data = await chatRepository.downloadMediaBytes(widget.url);
     final payload = utf8.decode(data);
-    return encryptionService.decryptBytesForChat(payload, chatId);
+    return encryptionService.decryptBytesForChat(payload, widget.chatId);
   }
 
-  Future<File> _decryptMediaFile(BuildContext context) async {
-    final bytes = await _decryptMedia(context);
+  Future<File> _decryptMediaFile() async {
+    final bytes = await _mediaFuture;
     final directory = await getTemporaryDirectory();
-    final extension = type == AppConstants.audioMessage ? 'm4a' : 'mp4';
-    final file = File('${directory.path}/secret_${url.hashCode}.$extension');
+    final extension = widget.type == AppConstants.audioMessage ? 'm4a' : 'mp4';
+    final file =
+        File('${directory.path}/secret_${widget.url.hashCode}.$extension');
     if (!await file.exists()) {
       await file.writeAsBytes(bytes, flush: true);
     }
@@ -798,7 +844,7 @@ class _SecretMediaError extends StatelessWidget {
 
 class _SecretDateSeparator extends StatelessWidget {
   final String label;
-  const _SecretDateSeparator({required this.label});
+  const _SecretDateSeparator({super.key, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -826,7 +872,7 @@ class _SecretDateSeparator extends StatelessWidget {
 }
 
 class _SecretTypingIndicator extends StatelessWidget {
-  const _SecretTypingIndicator();
+  const _SecretTypingIndicator({super.key});
 
   @override
   Widget build(BuildContext context) {

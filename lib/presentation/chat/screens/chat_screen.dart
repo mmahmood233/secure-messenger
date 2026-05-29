@@ -294,6 +294,7 @@ class _ChatScreenState extends State<ChatScreen> {
       );
       if (lastDate == null || msgDate != lastDate) {
         items.add(_DateSeparator(
+          key: ValueKey('date_${msgDate.toIso8601String()}'),
           label: DateFormatter.formatDateSeparator(msg.timestamp),
         ));
         lastDate = msgDate;
@@ -301,6 +302,7 @@ class _ChatScreenState extends State<ChatScreen> {
       final isMe =
           msg.senderId == context.read<AuthProvider>().currentUser!.uid;
       items.add(_MessageBubble(
+        key: ValueKey('message_${msg.id}'),
         message: msg,
         isMe: isMe,
         onLongPress: () => _showMessageOptions(
@@ -309,7 +311,9 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
       ));
     }
-    if (showTyping) items.add(const _TypingIndicator());
+    if (showTyping) {
+      items.add(const _TypingIndicator(key: ValueKey('typing_indicator')));
+    }
     return items;
   }
 
@@ -435,6 +439,7 @@ class _MessageBubble extends StatefulWidget {
   final VoidCallback onLongPress;
 
   const _MessageBubble({
+    super.key,
     required this.message,
     required this.isMe,
     required this.onLongPress,
@@ -500,7 +505,11 @@ class _MessageBubbleState extends State<_MessageBubble> {
                       ),
                     )
                   else if (message.mediaUrl != null)
-                    _MediaContent(url: message.mediaUrl!, type: message.type),
+                    _MediaContent(
+                      key: ValueKey('media_${message.id}_${message.mediaUrl}'),
+                      url: message.mediaUrl!,
+                      type: message.type,
+                    ),
                   const SizedBox(height: 4),
                   Row(
                     mainAxisSize: MainAxisSize.min,
@@ -560,18 +569,51 @@ class _StatusIcon extends StatelessWidget {
   }
 }
 
-class _MediaContent extends StatelessWidget {
+class _MediaContent extends StatefulWidget {
   final String url;
   final String type;
-  const _MediaContent({required this.url, required this.type});
+
+  const _MediaContent({
+    super.key,
+    required this.url,
+    required this.type,
+  });
+
+  @override
+  State<_MediaContent> createState() => _MediaContentState();
+}
+
+class _MediaContentState extends State<_MediaContent>
+    with AutomaticKeepAliveClientMixin {
+  late Future<String> _signedUrlFuture;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _signedUrlFuture = _createSignedUrl();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MediaContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.url != widget.url) {
+      _signedUrlFuture = _createSignedUrl();
+    }
+  }
+
+  Future<String> _createSignedUrl() {
+    return context.read<ChatRepository>().createSignedMediaUrl(widget.url);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final signedUrlFuture =
-        context.read<ChatRepository>().createSignedMediaUrl(url);
-    if (type == AppConstants.imageMessage) {
+    super.build(context);
+    if (widget.type == AppConstants.imageMessage) {
       return FutureBuilder<String>(
-        future: signedUrlFuture,
+        future: _signedUrlFuture,
         builder: (context, snapshot) {
           final signedUrl = snapshot.data;
           if (signedUrl == null) {
@@ -586,11 +628,11 @@ class _MediaContent extends StatelessWidget {
               context,
               MaterialPageRoute(
                 builder: (_) =>
-                    ImageViewerScreen(imageUrl: signedUrl, heroTag: url),
+                    ImageViewerScreen(imageUrl: signedUrl, heroTag: widget.url),
               ),
             ),
             child: Hero(
-              tag: url,
+              tag: widget.url,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: Image.network(
@@ -615,9 +657,9 @@ class _MediaContent extends StatelessWidget {
         },
       );
     }
-    if (type == AppConstants.audioMessage) {
+    if (widget.type == AppConstants.audioMessage) {
       return FutureBuilder<String>(
-        future: signedUrlFuture,
+        future: _signedUrlFuture,
         builder: (context, snapshot) {
           final signedUrl = snapshot.data;
           if (signedUrl == null) {
@@ -659,7 +701,7 @@ class _MediaContent extends StatelessWidget {
       );
     }
     return FutureBuilder<String>(
-      future: signedUrlFuture,
+      future: _signedUrlFuture,
       builder: (context, snapshot) {
         final signedUrl = snapshot.data;
         if (signedUrl == null) {
@@ -695,7 +737,7 @@ class _MediaContent extends StatelessWidget {
 }
 
 class _TypingIndicator extends StatelessWidget {
-  const _TypingIndicator();
+  const _TypingIndicator({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -779,7 +821,7 @@ class _DotState extends State<_Dot> with SingleTickerProviderStateMixin {
 
 class _DateSeparator extends StatelessWidget {
   final String label;
-  const _DateSeparator({required this.label});
+  const _DateSeparator({super.key, required this.label});
 
   @override
   Widget build(BuildContext context) {
