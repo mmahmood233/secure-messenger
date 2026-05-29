@@ -129,11 +129,7 @@ class UserRepository {
 
   Future<void> addContact(String currentUid, String contactUid) async {
     try {
-      await _client.from('contacts').upsert({
-        'owner_id': currentUid,
-        'contact_id': contactUid,
-        'added_at': DateTime.now().toUtc().toIso8601String(),
-      });
+      await _client.rpc('add_contact', params: {'contact_uid': contactUid});
     } catch (e) {
       throw NetworkException('Failed to add contact: $e');
     }

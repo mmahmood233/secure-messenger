@@ -137,6 +137,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
           }
 
           return ListView.builder(
+            padding: const EdgeInsets.only(top: 6, bottom: 24),
             itemCount: contacts.contacts.length,
             itemBuilder: (_, i) {
               final contact = contacts.contacts[i];
@@ -166,18 +167,20 @@ class _ContactTile extends StatelessWidget {
           builder: (_) => ViewProfileScreen(user: contact),
         ),
       ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       leading: UserAvatar(
-        photoUrl: contact.photoUrl,
-        displayName: contact.displayName,
-        showOnlineIndicator: true,
-        isOnline: contact.isOnline,
-      ),
+          photoUrl: contact.photoUrl,
+          displayName: contact.displayName,
+          radius: 27,
+          showOnlineIndicator: true,
+          isOnline: contact.isOnline),
       title: Text(contact.displayName,
           style: const TextStyle(
-              color: Colors.white, fontWeight: FontWeight.w500)),
+              color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
       subtitle: Text('@${contact.username}',
-          style: const TextStyle(color: AppTheme.subtitleColor, fontSize: 13)),
-      trailing: const Icon(Icons.chevron_right, color: AppTheme.subtitleColor),
+          style: const TextStyle(color: AppTheme.subtitleColor, fontSize: 14)),
+      trailing:
+          const Icon(Icons.chat_bubble_outline, color: AppTheme.primaryColor),
     );
   }
 }

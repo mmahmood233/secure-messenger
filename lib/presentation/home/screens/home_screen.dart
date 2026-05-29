@@ -13,6 +13,7 @@ import 'package:secure_messenger/presentation/contacts/screens/search_screen.dar
 import 'package:secure_messenger/presentation/profile/screens/profile_screen.dart';
 import 'package:secure_messenger/presentation/secret_chat/screens/secret_chat_screen.dart';
 import 'package:secure_messenger/presentation/widgets/offline_banner.dart';
+import 'package:secure_messenger/presentation/widgets/app_logo.dart';
 import 'package:secure_messenger/presentation/widgets/user_avatar.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -92,8 +93,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (i) => setState(() => _selectedIndex = i),
-        backgroundColor: AppTheme.surfaceColor,
-        indicatorColor: AppTheme.primaryColor.withOpacity(0.2),
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.chat_bubble_outline),
@@ -112,6 +111,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
         ],
       ),
+      floatingActionButton: _selectedIndex == 0
+          ? FloatingActionButton(
+              backgroundColor: AppTheme.primaryColor,
+              foregroundColor: Colors.white,
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ContactsScreen()),
+              ),
+              child: const Icon(Icons.chat_rounded),
+            )
+          : null,
     );
   }
 }
@@ -125,24 +135,30 @@ class _ChatsTab extends StatelessWidget {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('SecureMessenger'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'Chats'),
-              Tab(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.lock, size: 14, color: AppTheme.secretChatColor),
-                    SizedBox(width: 4),
-                    Text('Secret'),
-                  ],
+          title: const AppLogo(showWordmark: true, size: 34),
+          bottom: const PreferredSize(
+            preferredSize: Size.fromHeight(48),
+            child: TabBar(
+              tabs: [
+                Tab(text: 'Chats'),
+                Tab(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.lock,
+                          size: 14, color: AppTheme.secretChatColor),
+                      SizedBox(width: 4),
+                      Text('Secret'),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-            indicatorColor: AppTheme.primaryColor,
-            labelColor: Colors.white,
-            unselectedLabelColor: AppTheme.subtitleColor,
+              ],
+              indicatorColor: AppTheme.primaryColor,
+              labelColor: Colors.white,
+              unselectedLabelColor: AppTheme.subtitleColor,
+              labelStyle: TextStyle(fontWeight: FontWeight.w700),
+              unselectedLabelStyle: TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
           actions: [
             IconButton(
@@ -151,14 +167,6 @@ class _ChatsTab extends StatelessWidget {
               onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const SearchScreen()),
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.edit_square),
-              tooltip: 'New chat',
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const ContactsScreen()),
               ),
             ),
           ],
@@ -219,8 +227,14 @@ class _ChatList extends StatelessWidget {
           );
         }
 
-        return ListView.builder(
+        return ListView.separated(
+          padding: const EdgeInsets.only(top: 6, bottom: 88),
           itemCount: chats.length,
+          separatorBuilder: (_, __) => const Divider(
+            height: 1,
+            indent: 84,
+            color: AppTheme.dividerColor,
+          ),
           itemBuilder: (_, i) => _ChatTile(chat: chats[i], isSecret: isSecret),
         );
       },
@@ -247,8 +261,8 @@ class _ChatTile extends StatelessWidget {
 
         final unread = chat.unreadCount[currentUid] ?? 0;
 
-        return ListTile(
-          onTap: () async {
+        return InkWell(
+          onTap: () {
             if (isSecret) {
               Navigator.push(
                 context,
@@ -265,83 +279,131 @@ class _ChatTile extends StatelessWidget {
               );
             }
           },
-          leading: Stack(
-            children: [
-              UserAvatar(
-                photoUrl: user.photoUrl,
-                displayName: user.displayName,
-                showOnlineIndicator: true,
-                isOnline: user.isOnline,
-              ),
-              if (isSecret)
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: const BoxDecoration(
-                      color: AppTheme.secretChatColor,
-                      shape: BoxShape.circle,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+            child: Row(
+              children: [
+                Stack(
+                  children: [
+                    UserAvatar(
+                      photoUrl: user.photoUrl,
+                      displayName: user.displayName,
+                      radius: 27,
+                      showOnlineIndicator: true,
+                      isOnline: user.isOnline,
                     ),
-                    child: const Icon(Icons.lock, size: 8, color: Colors.white),
+                    if (isSecret)
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: const BoxDecoration(
+                            color: AppTheme.secretChatColor,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.lock,
+                            size: 9,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              user.displayName,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: unread > 0
+                                    ? FontWeight.w700
+                                    : FontWeight.w600,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (chat.lastMessageTime != null)
+                            Text(
+                              _formatTime(chat.lastMessageTime!),
+                              style: TextStyle(
+                                color: unread > 0
+                                    ? AppTheme.primaryColor
+                                    : AppTheme.subtitleColor,
+                                fontSize: 12,
+                                fontWeight: unread > 0
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 5),
+                      Row(
+                        children: [
+                          if (isSecret && chat.lastMessage != null) ...[
+                            const Icon(
+                              Icons.lock,
+                              size: 13,
+                              color: AppTheme.secretChatColor,
+                            ),
+                            const SizedBox(width: 4),
+                          ],
+                          Expanded(
+                            child: Text(
+                              isSecret && chat.lastMessage != null
+                                  ? 'Encrypted message'
+                                  : (chat.lastMessage ?? 'No messages yet'),
+                              style: TextStyle(
+                                color: unread > 0
+                                    ? Colors.white70
+                                    : AppTheme.subtitleColor,
+                                fontSize: 14,
+                                fontWeight: unread > 0
+                                    ? FontWeight.w600
+                                    : FontWeight.w400,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (unread > 0)
+                            Container(
+                              constraints: const BoxConstraints(
+                                minWidth: 22,
+                                minHeight: 22,
+                              ),
+                              alignment: Alignment.center,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 6),
+                              decoration: BoxDecoration(
+                                color: isSecret
+                                    ? AppTheme.secretChatColor
+                                    : AppTheme.primaryColor,
+                                borderRadius: BorderRadius.circular(11),
+                              ),
+                              child: Text(
+                                unread > 99 ? '99+' : unread.toString(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-            ],
-          ),
-          title: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  user.displayName,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (chat.lastMessageTime != null)
-                Text(
-                  _formatTime(chat.lastMessageTime!),
-                  style: TextStyle(
-                    color: unread > 0
-                        ? AppTheme.primaryColor
-                        : AppTheme.subtitleColor,
-                    fontSize: 12,
-                  ),
-                ),
-            ],
-          ),
-          subtitle: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  isSecret && chat.lastMessage != null
-                      ? '🔒 Encrypted message'
-                      : (chat.lastMessage ?? 'No messages yet'),
-                  style: TextStyle(
-                    color: unread > 0 ? Colors.white70 : AppTheme.subtitleColor,
-                    fontSize: 13,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (unread > 0)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: isSecret
-                        ? AppTheme.secretChatColor
-                        : AppTheme.primaryColor,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    unread > 99 ? '99+' : unread.toString(),
-                    style: const TextStyle(color: Colors.white, fontSize: 11),
-                  ),
-                ),
-            ],
+              ],
+            ),
           ),
         );
       },

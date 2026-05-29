@@ -17,6 +17,7 @@ import 'package:secure_messenger/presentation/chat/providers/chat_provider.dart'
 import 'package:secure_messenger/presentation/contacts/providers/contacts_provider.dart';
 import 'package:secure_messenger/presentation/home/screens/home_screen.dart';
 import 'package:secure_messenger/presentation/profile/providers/profile_provider.dart';
+import 'package:secure_messenger/presentation/widgets/app_logo.dart';
 import 'package:secure_messenger/supabase_options.dart';
 
 void main() async {
@@ -116,7 +117,7 @@ class _SplashScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.lock_rounded, size: 64, color: AppTheme.primaryColor),
+            AppLogo(size: 72),
             SizedBox(height: 16),
             Text(
               'SecureMessenger',

@@ -102,14 +102,14 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
       );
       setState(() => _editingMessageId = null);
     } else {
+      _messageController.clear();
+      _messageProvider.onTyping(widget.chat.id, uid, false);
       await _messageProvider.sendTextMessage(
         chatId: widget.chat.id,
         senderId: uid,
         content: text,
       );
     }
-    _messageController.clear();
-    _messageProvider.onTyping(widget.chat.id, uid, false);
   }
 
   Future<void> _pickAndSendMedia(ImageSource source, String type) async {
@@ -128,6 +128,22 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
       file: File(picked.path),
       type: type,
     );
+  }
+
+  Future<void> _pickAndSendImages() async {
+    final uid = context.read<AuthProvider>().currentUser!.uid;
+    final picker = ImagePicker();
+    final picked = await picker.pickMultiImage(imageQuality: 70);
+    if (picked.isEmpty) return;
+
+    for (final image in picked) {
+      await _messageProvider.sendMediaMessage(
+        chatId: widget.chat.id,
+        senderId: uid,
+        file: File(image.path),
+        type: AppConstants.imageMessage,
+      );
+    }
   }
 
   Future<void> _pickAndSendAudio() async {
@@ -159,12 +175,11 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
               ListTile(
                 leading: const Icon(Icons.photo_library_outlined,
                     color: AppTheme.secretChatColor),
-                title: const Text('Photo from Gallery',
+                title: const Text('Photos from Gallery',
                     style: TextStyle(color: Colors.white)),
                 onTap: () {
                   Navigator.pop(context);
-                  _pickAndSendMedia(
-                      ImageSource.gallery, AppConstants.imageMessage);
+                  _pickAndSendImages();
                 },
               ),
               ListTile(
@@ -317,34 +332,48 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
                 UserAvatar(
                   photoUrl: user.photoUrl,
                   displayName: user.displayName,
-                  radius: 18,
+                  radius: 20,
                   showOnlineIndicator: true,
                   isOnline: user.isOnline,
                 ),
-                const SizedBox(width: 10),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(user.displayName,
-                            style: const TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.w600)),
-                        const SizedBox(width: 6),
-                        const Icon(Icons.lock,
-                            size: 14, color: AppTheme.secretChatColor),
-                      ],
-                    ),
-                    Text(
-                      user.isOnline
-                          ? 'Online · E2E Encrypted'
-                          : user.lastSeen != null
-                              ? 'last seen ${timeago.format(user.lastSeen!)} · 🔒'
-                              : 'Secret Chat · E2E Encrypted',
-                      style: const TextStyle(
-                          fontSize: 11, color: AppTheme.secretChatColor),
-                    ),
-                  ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              user.displayName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          const Icon(Icons.lock,
+                              size: 14, color: AppTheme.secretChatColor),
+                        ],
+                      ),
+                      Text(
+                        user.isOnline
+                            ? 'online · encrypted'
+                            : user.lastSeen != null
+                                ? 'last seen ${timeago.format(user.lastSeen!)} · encrypted'
+                                : 'encrypted chat',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppTheme.secretChatColor,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             );
@@ -447,22 +476,23 @@ class _SecretMessageBubble extends StatelessWidget {
       child: GestureDetector(
         onLongPress: onLongPress,
         child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 3),
+          margin: const EdgeInsets.symmetric(vertical: 2),
           constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.75,
+            maxWidth:
+                (MediaQuery.of(context).size.width * 0.78).clamp(180.0, 420.0),
           ),
           decoration: BoxDecoration(
             color: isMe
                 ? AppTheme.secretChatColor.withOpacity(0.85)
                 : AppTheme.receivedBubbleColor,
             borderRadius: BorderRadius.only(
-              topLeft: const Radius.circular(18),
-              topRight: const Radius.circular(18),
-              bottomLeft: Radius.circular(isMe ? 18 : 4),
-              bottomRight: Radius.circular(isMe ? 4 : 18),
+              topLeft: const Radius.circular(16),
+              topRight: const Radius.circular(16),
+              bottomLeft: Radius.circular(isMe ? 16 : 3),
+              bottomRight: Radius.circular(isMe ? 3 : 16),
             ),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.fromLTRB(12, 8, 8, 6),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -499,7 +529,11 @@ class _SecretMessageBubble extends StatelessWidget {
               else
                 Text(
                   message.content,
-                  style: const TextStyle(color: Colors.white, fontSize: 15),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    height: 1.28,
+                  ),
                 ),
               const SizedBox(height: 4),
               Row(
@@ -517,7 +551,10 @@ class _SecretMessageBubble extends StatelessWidget {
                   Text(
                     DateFormat('HH:mm').format(message.timestamp),
                     style: const TextStyle(
-                        color: AppTheme.subtitleColor, fontSize: 11),
+                      color: AppTheme.subtitleColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                   if (isMe) ...[
                     const SizedBox(width: 4),
@@ -889,7 +926,7 @@ class _SecretMessageInput extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor,
         border: Border(
@@ -898,18 +935,32 @@ class _SecretMessageInput extends StatelessWidget {
       ),
       child: SafeArea(
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            IconButton(
-              icon:
-                  const Icon(Icons.attach_file, color: AppTheme.subtitleColor),
-              onPressed: onAttach,
+            Container(
+              width: 44,
+              height: 44,
+              decoration: const BoxDecoration(
+                color: AppTheme.inputColor,
+                shape: BoxShape.circle,
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.attach_file,
+                    color: AppTheme.subtitleColor, size: 21),
+                onPressed: onAttach,
+              ),
             ),
+            const SizedBox(width: 8),
             Expanded(
               child: TextField(
                 controller: controller,
                 maxLines: 5,
                 minLines: 1,
-                style: const TextStyle(color: Colors.white, fontSize: 15),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  height: 1.25,
+                ),
                 decoration: InputDecoration(
                   hintText: isEditing ? 'Edit message...' : 'Secret message...',
                   hintStyle: const TextStyle(color: AppTheme.subtitleColor),
@@ -918,9 +969,9 @@ class _SecretMessageInput extends StatelessWidget {
                     borderSide: BorderSide.none,
                   ),
                   filled: true,
-                  fillColor: AppTheme.cardColor,
+                  fillColor: AppTheme.inputColor,
                   contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                 ),
                 onChanged: (text) => onTyping(text.isNotEmpty),
                 onSubmitted: (_) => onSend(),

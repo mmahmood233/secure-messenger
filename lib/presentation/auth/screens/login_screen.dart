@@ -6,6 +6,7 @@ import 'package:secure_messenger/presentation/auth/screens/signup_screen.dart';
 import 'package:secure_messenger/presentation/widgets/app_text_field.dart';
 import 'package:secure_messenger/presentation/widgets/app_button.dart';
 import 'package:secure_messenger/presentation/widgets/error_banner.dart';
+import 'package:secure_messenger/presentation/widgets/app_logo.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -69,21 +70,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 32),
-                    Center(
-                      child: Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryColor.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Icon(
-                          Icons.lock_rounded,
-                          color: AppTheme.primaryColor,
-                          size: 40,
-                        ),
-                      ),
-                    ),
+                    const Center(child: AppLogo(size: 76)),
                     const SizedBox(height: 32),
                     const Text(
                       'Welcome back',

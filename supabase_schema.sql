@@ -55,6 +55,40 @@ create index if not exists profiles_username_idx on public.profiles (username);
 create index if not exists chats_participant_ids_idx on public.chats using gin (participant_ids);
 create index if not exists messages_chat_timestamp_idx on public.messages (chat_id, timestamp);
 
+alter table public.profiles replica identity full;
+alter table public.chats replica identity full;
+alter table public.messages replica identity full;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'profiles'
+  ) then
+    alter publication supabase_realtime add table public.profiles;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'chats'
+  ) then
+    alter publication supabase_realtime add table public.chats;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'messages'
+  ) then
+    alter publication supabase_realtime add table public.messages;
+  end if;
+end $$;
+
 grant usage on schema public to anon, authenticated;
 grant select (id, username) on public.profiles to anon;
 grant select, insert, update on public.profiles to authenticated;
@@ -92,6 +126,51 @@ end;
 $$;
 
 grant execute on function public.add_contact(uuid) to authenticated;
+
+create or replace function public.mark_chat_read(target_chat_id text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_uid uuid := auth.uid();
+  unread jsonb;
+begin
+  if current_uid is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  if not exists (
+    select 1 from public.chats
+    where id = target_chat_id
+      and current_uid = any(participant_ids)
+  ) then
+    raise exception 'Chat not found';
+  end if;
+
+  update public.messages
+  set status = 'read'
+  where chat_id = target_chat_id
+    and sender_id <> current_uid
+    and status <> 'read';
+
+  select unread_count into unread
+  from public.chats
+  where id = target_chat_id;
+
+  update public.chats
+  set unread_count = jsonb_set(
+    coalesce(unread, '{}'::jsonb),
+    array[current_uid::text],
+    '0'::jsonb,
+    true
+  )
+  where id = target_chat_id;
+end;
+$$;
+
+grant execute on function public.mark_chat_read(text) to authenticated;
 
 alter table public.profiles enable row level security;
 alter table public.contacts enable row level security;

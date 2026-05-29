@@ -93,26 +93,22 @@ class ChatRepository {
     required String senderId,
     required String content,
     required String type,
+    String? messageId,
+    DateTime? timestamp,
     String? mediaUrl,
     String? thumbnailUrl,
   }) async {
     try {
-      final msgId = _uuid.v4();
       final message = MessageModel(
-        id: msgId,
+        id: messageId ?? _uuid.v4(),
         senderId: senderId,
         content: content,
         type: type,
         status: AppConstants.statusSent,
-        timestamp: DateTime.now(),
+        timestamp: timestamp ?? DateTime.now(),
         mediaUrl: mediaUrl,
         thumbnailUrl: thumbnailUrl,
       );
-
-      await _client.from('messages').insert({
-        ...message.toMap(),
-        'chat_id': chatId,
-      });
 
       final chat = await getChat(chatId);
       final otherUid = chat.getOtherParticipantId(senderId);
@@ -132,6 +128,11 @@ class ChatRepository {
         'last_message_time': DateTime.now().toUtc().toIso8601String(),
         'unread_count': unreadCount,
       }).eq('id', chatId);
+
+      await _client.from('messages').insert({
+        ...message.toMap(),
+        'chat_id': chatId,
+      });
 
       return message;
     } catch (e) {
@@ -172,19 +173,24 @@ class ChatRepository {
 
   Future<void> markMessagesAsRead(String chatId, String uid) async {
     try {
-      await _client
-          .from('messages')
-          .update({'status': AppConstants.statusRead})
-          .eq('chat_id', chatId)
-          .neq('sender_id', uid);
+      await _client.rpc('mark_chat_read', params: {'target_chat_id': chatId});
+    } catch (_) {
+      try {
+        await _client
+            .from('messages')
+            .update({'status': AppConstants.statusRead})
+            .eq('chat_id', chatId)
+            .neq('sender_id', uid)
+            .neq('status', AppConstants.statusRead);
 
-      final chat = await getChat(chatId);
-      final unreadCount = Map<String, int>.from(chat.unreadCount);
-      unreadCount[uid] = 0;
-      await _client
-          .from('chats')
-          .update({'unread_count': unreadCount}).eq('id', chatId);
-    } catch (_) {}
+        final chat = await getChat(chatId);
+        final unreadCount = Map<String, int>.from(chat.unreadCount);
+        unreadCount[uid] = 0;
+        await _client
+            .from('chats')
+            .update({'unread_count': unreadCount}).eq('id', chatId);
+      } catch (_) {}
+    }
   }
 
   Future<void> markMessagesDelivered(String chatId, String uid) async {

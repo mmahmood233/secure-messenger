@@ -95,14 +95,14 @@ class _ChatScreenState extends State<ChatScreen> {
       );
       setState(() => _editingMessageId = null);
     } else {
+      _messageController.clear();
+      _messageProvider.onTyping(widget.chat.id, uid, false);
       await _messageProvider.sendTextMessage(
         chatId: widget.chat.id,
         senderId: uid,
         content: text,
       );
     }
-    _messageController.clear();
-    _messageProvider.onTyping(widget.chat.id, uid, false);
   }
 
   Future<void> _pickAndSendMedia(ImageSource source, String type) async {
@@ -121,6 +121,22 @@ class _ChatScreenState extends State<ChatScreen> {
       file: File(picked.path),
       type: type,
     );
+  }
+
+  Future<void> _pickAndSendImages() async {
+    final uid = context.read<AuthProvider>().currentUser!.uid;
+    final picker = ImagePicker();
+    final picked = await picker.pickMultiImage(imageQuality: 70);
+    if (picked.isEmpty) return;
+
+    for (final image in picked) {
+      await _messageProvider.sendMediaMessage(
+        chatId: widget.chat.id,
+        senderId: uid,
+        file: File(image.path),
+        type: AppConstants.imageMessage,
+      );
+    }
   }
 
   Future<void> _pickAndSendAudio() async {
@@ -152,12 +168,11 @@ class _ChatScreenState extends State<ChatScreen> {
               ListTile(
                 leading: const Icon(Icons.photo_library_outlined,
                     color: AppTheme.primaryColor),
-                title: const Text('Photo from Gallery',
+                title: const Text('Photos from Gallery',
                     style: TextStyle(color: Colors.white)),
                 onTap: () {
                   Navigator.pop(context);
-                  _pickAndSendMedia(
-                      ImageSource.gallery, AppConstants.imageMessage);
+                  _pickAndSendImages();
                 },
               ),
               ListTile(
@@ -304,7 +319,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        leadingWidth: 40,
+        leadingWidth: 36,
         title: StreamBuilder<UserModel?>(
           stream:
               context.read<UserRepository>().watchUser(widget.otherUser.uid),
@@ -315,31 +330,41 @@ class _ChatScreenState extends State<ChatScreen> {
                 UserAvatar(
                   photoUrl: user.photoUrl,
                   displayName: user.displayName,
-                  radius: 18,
+                  radius: 20,
                   showOnlineIndicator: true,
                   isOnline: user.isOnline,
                 ),
-                const SizedBox(width: 10),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(user.displayName,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user.displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w600)),
-                    Text(
-                      user.isOnline
-                          ? 'Online'
-                          : user.lastSeen != null
-                              ? 'last seen ${timeago.format(user.lastSeen!)}'
-                              : 'Offline',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: user.isOnline
-                            ? AppTheme.secondaryColor
-                            : AppTheme.subtitleColor,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                    ),
-                  ],
+                      Text(
+                        user.isOnline
+                            ? 'online'
+                            : user.lastSeen != null
+                                ? 'last seen ${timeago.format(user.lastSeen!)}'
+                                : 'offline',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: user.isOnline
+                              ? AppTheme.secondaryColor
+                              : AppTheme.subtitleColor,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             );
@@ -366,7 +391,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           if (_editingMessageId != null)
             Container(
-              color: AppTheme.primaryColor.withOpacity(0.1),
+              color: AppTheme.primaryColor.withOpacity(0.12),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
@@ -436,22 +461,23 @@ class _MessageBubbleState extends State<_MessageBubble> {
               isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             Container(
-              margin: const EdgeInsets.symmetric(vertical: 3),
+              margin: const EdgeInsets.symmetric(vertical: 2),
               constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.75,
+                maxWidth: (MediaQuery.of(context).size.width * 0.78)
+                    .clamp(180.0, 420.0),
               ),
               decoration: BoxDecoration(
                 color: isMe
                     ? AppTheme.sentBubbleColor
                     : AppTheme.receivedBubbleColor,
                 borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(18),
-                  topRight: const Radius.circular(18),
-                  bottomLeft: Radius.circular(isMe ? 18 : 4),
-                  bottomRight: Radius.circular(isMe ? 4 : 18),
+                  topLeft: const Radius.circular(16),
+                  topRight: const Radius.circular(16),
+                  bottomLeft: Radius.circular(isMe ? 16 : 3),
+                  bottomRight: Radius.circular(isMe ? 3 : 16),
                 ),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.fromLTRB(12, 8, 8, 6),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -467,7 +493,11 @@ class _MessageBubbleState extends State<_MessageBubble> {
                   else if (message.type == AppConstants.textMessage)
                     Text(
                       message.content,
-                      style: const TextStyle(color: Colors.white, fontSize: 15),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        height: 1.28,
+                      ),
                     )
                   else if (message.mediaUrl != null)
                     _MediaContent(url: message.mediaUrl!, type: message.type),
@@ -478,7 +508,10 @@ class _MessageBubbleState extends State<_MessageBubble> {
                       Text(
                         DateFormat('HH:mm').format(message.timestamp),
                         style: const TextStyle(
-                            color: Colors.white70, fontSize: 11),
+                          color: Colors.white70,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                       if (isMe) ...[
                         const SizedBox(width: 4),
@@ -791,25 +824,39 @@ class _MessageInput extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
       decoration: const BoxDecoration(
         color: AppTheme.surfaceColor,
         border: Border(top: BorderSide(color: AppTheme.dividerColor)),
       ),
       child: SafeArea(
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            IconButton(
-              icon:
-                  const Icon(Icons.attach_file, color: AppTheme.subtitleColor),
-              onPressed: onAttach,
+            Container(
+              width: 44,
+              height: 44,
+              decoration: const BoxDecoration(
+                color: AppTheme.inputColor,
+                shape: BoxShape.circle,
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.attach_file,
+                    color: AppTheme.subtitleColor, size: 21),
+                onPressed: onAttach,
+              ),
             ),
+            const SizedBox(width: 8),
             Expanded(
               child: TextField(
                 controller: controller,
                 maxLines: 5,
                 minLines: 1,
-                style: const TextStyle(color: Colors.white, fontSize: 15),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  height: 1.25,
+                ),
                 decoration: InputDecoration(
                   hintText: isEditing ? 'Edit message...' : 'Type a message...',
                   hintStyle: const TextStyle(color: AppTheme.subtitleColor),
@@ -818,9 +865,9 @@ class _MessageInput extends StatelessWidget {
                     borderSide: BorderSide.none,
                   ),
                   filled: true,
-                  fillColor: AppTheme.cardColor,
+                  fillColor: AppTheme.inputColor,
                   contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                 ),
                 onChanged: (text) => onTyping(text.isNotEmpty),
                 onSubmitted: (_) => onSend(),

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
 import 'package:secure_messenger/core/constants/app_constants.dart';
 import 'package:secure_messenger/core/errors/app_exception.dart';
 import 'package:secure_messenger/data/models/chat_model.dart';
@@ -73,13 +74,20 @@ class ChatProvider extends ChangeNotifier {
 }
 
 class MessageProvider extends ChangeNotifier {
+  static const _uuid = Uuid();
+
   final ChatRepository _chatRepository;
 
   List<MessageModel> _messages = [];
+  final Map<String, MessageModel> _pendingMessages = {};
   bool _isSending = false;
   String? _errorMessage;
   Map<String, bool> _typingUsers = {};
   Timer? _typingTimer;
+  Timer? _readSyncTimer;
+  Timer? _readFollowUpTimer;
+  bool _markingRead = false;
+  bool _lastTypingState = false;
 
   List<MessageModel> get messages => _messages;
   bool get isSending => _isSending;
@@ -97,7 +105,13 @@ class MessageProvider extends ChangeNotifier {
 
     _messagesSub = _chatRepository.watchMessages(chatId).listen(
       (messages) {
-        _messages = messages;
+        final remoteIds = messages.map((message) => message.id).toSet();
+        _pendingMessages.removeWhere((id, _) => remoteIds.contains(id));
+        _messages = [
+          ...messages,
+          ..._pendingMessages.values,
+        ]..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+        _markIncomingMessagesAsRead(chatId, currentUid, messages);
         notifyListeners();
       },
       onError: (e) {
@@ -116,13 +130,18 @@ class MessageProvider extends ChangeNotifier {
     _chatRepository
         .markMessagesDelivered(chatId, currentUid)
         .catchError((_) {});
-    _chatRepository.markMessagesAsRead(chatId, currentUid).catchError((_) {});
+    _syncReadState(chatId, currentUid);
   }
 
   void stopListening(String chatId, String currentUid) {
     _messagesSub?.cancel();
     _typingSub?.cancel();
+    _typingTimer?.cancel();
+    _readSyncTimer?.cancel();
+    _readFollowUpTimer?.cancel();
+    _lastTypingState = false;
     _chatRepository.setTyping(chatId, currentUid, false).catchError((_) {});
+    _chatRepository.markMessagesAsRead(chatId, currentUid).catchError((_) {});
   }
 
   Future<void> sendTextMessage({
@@ -131,16 +150,32 @@ class MessageProvider extends ChangeNotifier {
     required String content,
   }) async {
     if (content.trim().isEmpty) return;
+    final trimmed = content.trim();
+    final message = MessageModel(
+      id: _uuid.v4(),
+      senderId: senderId,
+      content: trimmed,
+      type: AppConstants.textMessage,
+      status: AppConstants.statusSent,
+      timestamp: DateTime.now(),
+    );
+    _pendingMessages[message.id] = message;
+    _messages = [..._messages, message]
+      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
     _isSending = true;
     notifyListeners();
     try {
       await _chatRepository.sendMessage(
         chatId: chatId,
         senderId: senderId,
-        content: content.trim(),
+        messageId: message.id,
+        timestamp: message.timestamp,
+        content: trimmed,
         type: AppConstants.textMessage,
       );
     } on AppException catch (e) {
+      _pendingMessages.remove(message.id);
+      _messages = _messages.where((msg) => msg.id != message.id).toList();
       _errorMessage = e.message;
     } finally {
       _isSending = false;
@@ -215,12 +250,52 @@ class MessageProvider extends ChangeNotifier {
 
   void onTyping(String chatId, String uid, bool isTyping) {
     _typingTimer?.cancel();
-    _chatRepository.setTyping(chatId, uid, isTyping).catchError((_) {});
+    if (_lastTypingState != isTyping) {
+      _lastTypingState = isTyping;
+      _chatRepository.setTyping(chatId, uid, isTyping).catchError((_) {});
+    }
     if (isTyping) {
       _typingTimer = Timer(AppConstants.typingTimeout, () {
+        _lastTypingState = false;
         _chatRepository.setTyping(chatId, uid, false).catchError((_) {});
       });
     }
+  }
+
+  void _markIncomingMessagesAsRead(
+    String chatId,
+    String currentUid,
+    List<MessageModel> messages,
+  ) {
+    final hasUnreadIncoming = messages.any(
+      (message) =>
+          message.senderId != currentUid &&
+          message.status != AppConstants.statusRead,
+    );
+    if (!hasUnreadIncoming) return;
+
+    _scheduleReadSync(chatId, currentUid);
+  }
+
+  void _scheduleReadSync(String chatId, String currentUid) {
+    _readSyncTimer?.cancel();
+    _readFollowUpTimer?.cancel();
+    _readSyncTimer = Timer(const Duration(milliseconds: 80), () {
+      _syncReadState(chatId, currentUid);
+    });
+    _readFollowUpTimer = Timer(const Duration(milliseconds: 900), () {
+      _syncReadState(chatId, currentUid);
+    });
+  }
+
+  void _syncReadState(String chatId, String currentUid) {
+    if (_markingRead) return;
+    _markingRead = true;
+    _chatRepository.markMessagesAsRead(chatId, currentUid).catchError((_) {
+      return;
+    }).whenComplete(() {
+      _markingRead = false;
+    });
   }
 
   void clearError() {
@@ -233,6 +308,8 @@ class MessageProvider extends ChangeNotifier {
     _messagesSub?.cancel();
     _typingSub?.cancel();
     _typingTimer?.cancel();
+    _readSyncTimer?.cancel();
+    _readFollowUpTimer?.cancel();
     super.dispose();
   }
 }

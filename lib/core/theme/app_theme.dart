@@ -7,6 +7,7 @@ class AppTheme {
   static const Color surfaceColor = Color(0xFF1E1E2E);
   static const Color backgroundColor = Color(0xFF12121F);
   static const Color cardColor = Color(0xFF252535);
+  static const Color inputColor = Color(0xFF2A2A3C);
   static const Color onPrimaryColor = Colors.white;
   static const Color subtitleColor = Color(0xFF9E9EB8);
   static const Color dividerColor = Color(0xFF2E2E4E);
@@ -18,6 +19,8 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
+      fontFamily: 'Roboto',
+      visualDensity: VisualDensity.standard,
       colorScheme: const ColorScheme.dark(
         primary: primaryColor,
         secondary: secondaryColor,
@@ -35,29 +38,31 @@ class AppTheme {
         foregroundColor: Colors.white,
         elevation: 0,
         centerTitle: false,
+        toolbarHeight: 64,
         titleTextStyle: TextStyle(
           color: Colors.white,
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
+          fontSize: 22,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0,
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: cardColor,
+        fillColor: inputColor,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: dividerColor),
+          borderRadius: BorderRadius.circular(24),
+          borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: dividerColor),
+          borderRadius: BorderRadius.circular(24),
+          borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: primaryColor, width: 2),
+          borderRadius: BorderRadius.circular(24),
+          borderSide: const BorderSide(color: primaryColor, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(24),
           borderSide: const BorderSide(color: errorColor),
         ),
         labelStyle: const TextStyle(color: subtitleColor),
@@ -69,10 +74,10 @@ class AppTheme {
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryColor,
           foregroundColor: Colors.white,
-          minimumSize: const Size(double.infinity, 52),
+          minimumSize: const Size(double.infinity, 50),
           shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
@@ -82,6 +87,23 @@ class AppTheme {
       listTileTheme: const ListTileThemeData(
         iconColor: subtitleColor,
         textColor: Colors.white,
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        height: 72,
+        backgroundColor: surfaceColor,
+        indicatorColor: primaryColor.withOpacity(0.18),
+        labelTextStyle: WidgetStateProperty.resolveWith(
+          (states) => TextStyle(
+            fontSize: 12,
+            fontWeight: states.contains(WidgetState.selected)
+                ? FontWeight.w700
+                : FontWeight.w500,
+            color: states.contains(WidgetState.selected)
+                ? Colors.white
+                : subtitleColor,
+          ),
+        ),
       ),
     );
   }
