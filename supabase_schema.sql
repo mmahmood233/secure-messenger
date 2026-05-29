@@ -55,10 +55,54 @@ create index if not exists profiles_username_idx on public.profiles (username);
 create index if not exists chats_participant_ids_idx on public.chats using gin (participant_ids);
 create index if not exists messages_chat_timestamp_idx on public.messages (chat_id, timestamp);
 
+grant usage on schema public to anon, authenticated;
+grant select (id, username) on public.profiles to anon;
+grant select, insert, update on public.profiles to authenticated;
+grant select, insert, update, delete on public.contacts to authenticated;
+grant select, insert, update on public.chats to authenticated;
+grant select, insert, update on public.messages to authenticated;
+
+create or replace function public.add_contact(contact_uid uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_uid uuid := auth.uid();
+begin
+  if current_uid is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  if contact_uid = current_uid then
+    raise exception 'Cannot add yourself as a contact';
+  end if;
+
+  if not exists (select 1 from public.profiles where id = contact_uid) then
+    raise exception 'Contact profile not found';
+  end if;
+
+  insert into public.contacts (owner_id, contact_id)
+  values
+    (current_uid, contact_uid),
+    (contact_uid, current_uid)
+  on conflict (owner_id, contact_id) do nothing;
+end;
+$$;
+
+grant execute on function public.add_contact(uuid) to authenticated;
+
 alter table public.profiles enable row level security;
 alter table public.contacts enable row level security;
 alter table public.chats enable row level security;
 alter table public.messages enable row level security;
+
+drop policy if exists "anon can check usernames" on public.profiles;
+create policy "anon can check usernames"
+on public.profiles for select
+to anon
+using (true);
 
 drop policy if exists "profiles readable by signed-in users" on public.profiles;
 create policy "profiles readable by signed-in users"
