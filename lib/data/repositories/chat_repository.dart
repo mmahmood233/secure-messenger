@@ -88,6 +88,19 @@ class ChatRepository {
         .map((rows) => rows.map(MessageModel.fromSupabase).toList());
   }
 
+  Future<List<MessageModel>> getMessages(String chatId) async {
+    try {
+      final rows = await _client
+          .from('messages')
+          .select()
+          .eq('chat_id', chatId)
+          .order('timestamp', ascending: true);
+      return rows.map<MessageModel>(MessageModel.fromSupabase).toList();
+    } catch (e) {
+      throw NetworkException('Failed to load messages: $e');
+    }
+  }
+
   Future<MessageModel> sendMessage({
     required String chatId,
     required String senderId,

@@ -86,8 +86,12 @@ class MessageProvider extends ChangeNotifier {
   Timer? _typingTimer;
   Timer? _readSyncTimer;
   Timer? _readFollowUpTimer;
+  Timer? _reconnectTimer;
   bool _markingRead = false;
   bool _lastTypingState = false;
+  bool _isListening = false;
+  String? _activeChatId;
+  String? _activeUid;
 
   List<MessageModel> get messages => _messages;
   bool get isSending => _isSending;
@@ -100,45 +104,98 @@ class MessageProvider extends ChangeNotifier {
   MessageProvider(this._chatRepository);
 
   void startListening(String chatId, String currentUid) {
+    _isListening = true;
+    _activeChatId = chatId;
+    _activeUid = currentUid;
+    _reconnectTimer?.cancel();
     _messagesSub?.cancel();
     _typingSub?.cancel();
 
-    _messagesSub = _chatRepository.watchMessages(chatId).listen(
-      (messages) {
-        final remoteIds = messages.map((message) => message.id).toSet();
-        _pendingMessages.removeWhere((id, _) => remoteIds.contains(id));
-        _messages = [
-          ...messages,
-          ..._pendingMessages.values,
-        ]..sort((a, b) => a.timestamp.compareTo(b.timestamp));
-        _markIncomingMessagesAsRead(chatId, currentUid, messages);
-        notifyListeners();
-      },
-      onError: (e) {
-        _errorMessage = 'Failed to load messages: $e';
-        notifyListeners();
-      },
-    );
+    _subscribeToMessages(chatId, currentUid);
+    _subscribeToTyping(chatId, currentUid);
 
-    _typingSub = _chatRepository.watchTyping(chatId).listen(
-      (typing) {
-        _typingUsers = Map.from(typing)..remove(currentUid);
-        notifyListeners();
-      },
-    );
-
+    _refreshMessages(chatId, currentUid);
     _chatRepository
         .markMessagesDelivered(chatId, currentUid)
         .catchError((_) {});
     _syncReadState(chatId, currentUid);
   }
 
+  void _subscribeToMessages(String chatId, String currentUid) {
+    _messagesSub?.cancel();
+    _messagesSub = _chatRepository.watchMessages(chatId).listen(
+      (messages) {
+        _applyMessages(messages, chatId, currentUid);
+      },
+      onError: (e) {
+        _refreshMessages(chatId, currentUid);
+        _scheduleReconnect();
+      },
+    );
+  }
+
+  void _subscribeToTyping(String chatId, String currentUid) {
+    _typingSub?.cancel();
+    _typingSub = _chatRepository.watchTyping(chatId).listen(
+      (typing) {
+        _typingUsers = Map.from(typing)..remove(currentUid);
+        notifyListeners();
+      },
+      onError: (_) => _scheduleReconnect(),
+    );
+  }
+
+  Future<void> _refreshMessages(String chatId, String currentUid) async {
+    try {
+      final messages = await _chatRepository.getMessages(chatId);
+      _applyMessages(messages, chatId, currentUid);
+    } catch (_) {}
+  }
+
+  void _applyMessages(
+    List<MessageModel> messages,
+    String chatId,
+    String currentUid,
+  ) {
+    final remoteIds = messages.map((message) => message.id).toSet();
+    _pendingMessages.removeWhere((id, _) => remoteIds.contains(id));
+    _messages = [
+      ...messages,
+      ..._pendingMessages.values,
+    ]..sort(_compareMessages);
+    _markIncomingMessagesAsRead(chatId, currentUid, messages);
+    notifyListeners();
+  }
+
+  int _compareMessages(MessageModel a, MessageModel b) {
+    final aPending = _pendingMessages.containsKey(a.id);
+    final bPending = _pendingMessages.containsKey(b.id);
+    if (aPending != bPending) return aPending ? 1 : -1;
+    return a.timestamp.compareTo(b.timestamp);
+  }
+
+  void _scheduleReconnect() {
+    if (!_isListening || _reconnectTimer?.isActive == true) return;
+    _reconnectTimer = Timer(const Duration(seconds: 2), () {
+      final chatId = _activeChatId;
+      final uid = _activeUid;
+      if (!_isListening || chatId == null || uid == null) return;
+      _subscribeToMessages(chatId, uid);
+      _subscribeToTyping(chatId, uid);
+      _refreshMessages(chatId, uid);
+    });
+  }
+
   void stopListening(String chatId, String currentUid) {
+    _isListening = false;
+    _activeChatId = null;
+    _activeUid = null;
     _messagesSub?.cancel();
     _typingSub?.cancel();
     _typingTimer?.cancel();
     _readSyncTimer?.cancel();
     _readFollowUpTimer?.cancel();
+    _reconnectTimer?.cancel();
     _lastTypingState = false;
     _chatRepository.setTyping(chatId, currentUid, false).catchError((_) {});
     _chatRepository.markMessagesAsRead(chatId, currentUid).catchError((_) {});
@@ -160,8 +217,7 @@ class MessageProvider extends ChangeNotifier {
       timestamp: DateTime.now(),
     );
     _pendingMessages[message.id] = message;
-    _messages = [..._messages, message]
-      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    _messages = [..._messages, message]..sort(_compareMessages);
     _isSending = true;
     notifyListeners();
     try {
@@ -310,6 +366,7 @@ class MessageProvider extends ChangeNotifier {
     _typingTimer?.cancel();
     _readSyncTimer?.cancel();
     _readFollowUpTimer?.cancel();
+    _reconnectTimer?.cancel();
     super.dispose();
   }
 }

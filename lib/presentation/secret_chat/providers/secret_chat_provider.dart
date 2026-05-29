@@ -23,9 +23,13 @@ class SecretMessageProvider extends ChangeNotifier {
   Timer? _typingTimer;
   Timer? _readSyncTimer;
   Timer? _readFollowUpTimer;
+  Timer? _reconnectTimer;
   bool _keysReady = false;
   bool _markingRead = false;
   bool _lastTypingState = false;
+  bool _isListening = false;
+  String? _activeChatId;
+  String? _activeUid;
 
   List<MessageModel> get messages => _messages;
   bool get isSending => _isSending;
@@ -48,63 +52,115 @@ class SecretMessageProvider extends ChangeNotifier {
     }
     notifyListeners();
 
+    _isListening = true;
+    _activeChatId = chatId;
+    _activeUid = currentUid;
+    _reconnectTimer?.cancel();
     _messagesSub?.cancel();
     _typingSub?.cancel();
 
-    _messagesSub = _chatRepository.watchMessages(chatId).listen(
-      (rawMessages) async {
-        final decrypted = <MessageModel>[];
-        for (final msg in rawMessages) {
-          if (msg.isDeleted) {
-            decrypted.add(msg);
-            continue;
-          }
-          if (msg.type == AppConstants.textMessage) {
-            try {
-              final plain =
-                  await _encryptionService.decrypt(msg.content, chatId);
-              decrypted.add(msg.copyWith(content: plain));
-            } catch (_) {
-              decrypted.add(msg.copyWith(content: '🔒 [Encrypted message]'));
-            }
-          } else {
-            decrypted.add(msg);
-          }
-        }
-        final remoteIds = rawMessages.map((message) => message.id).toSet();
-        _pendingMessages.removeWhere((id, _) => remoteIds.contains(id));
-        _messages = [
-          ...decrypted,
-          ..._pendingMessages.values,
-        ]..sort((a, b) => a.timestamp.compareTo(b.timestamp));
-        _markIncomingMessagesAsRead(chatId, currentUid, rawMessages);
-        notifyListeners();
-      },
-      onError: (e) {
-        _errorMessage = 'Failed to load messages: $e';
-        notifyListeners();
-      },
-    );
+    _subscribeToMessages(chatId, currentUid);
+    _subscribeToTyping(chatId, currentUid);
 
-    _typingSub = _chatRepository.watchTyping(chatId).listen(
-      (typing) {
-        _typingUsers = Map.from(typing)..remove(currentUid);
-        notifyListeners();
-      },
-    );
-
+    _refreshMessages(chatId, currentUid);
     _chatRepository
         .markMessagesDelivered(chatId, currentUid)
         .catchError((_) {});
     _syncReadState(chatId, currentUid);
   }
 
+  void _subscribeToMessages(String chatId, String currentUid) {
+    _messagesSub?.cancel();
+    _messagesSub = _chatRepository.watchMessages(chatId).listen(
+      (rawMessages) async {
+        await _applyRawMessages(rawMessages, chatId, currentUid);
+      },
+      onError: (e) {
+        _refreshMessages(chatId, currentUid);
+        _scheduleReconnect();
+      },
+    );
+  }
+
+  void _subscribeToTyping(String chatId, String currentUid) {
+    _typingSub?.cancel();
+    _typingSub = _chatRepository.watchTyping(chatId).listen(
+      (typing) {
+        _typingUsers = Map.from(typing)..remove(currentUid);
+        notifyListeners();
+      },
+      onError: (_) => _scheduleReconnect(),
+    );
+  }
+
+  Future<void> _refreshMessages(String chatId, String currentUid) async {
+    try {
+      final messages = await _chatRepository.getMessages(chatId);
+      await _applyRawMessages(messages, chatId, currentUid);
+    } catch (_) {}
+  }
+
+  Future<void> _applyRawMessages(
+    List<MessageModel> rawMessages,
+    String chatId,
+    String currentUid,
+  ) async {
+    final decrypted = <MessageModel>[];
+    for (final msg in rawMessages) {
+      if (msg.isDeleted) {
+        decrypted.add(msg);
+        continue;
+      }
+      if (msg.type == AppConstants.textMessage) {
+        try {
+          final plain = await _encryptionService.decrypt(msg.content, chatId);
+          decrypted.add(msg.copyWith(content: plain));
+        } catch (_) {
+          decrypted.add(msg.copyWith(content: '🔒 [Encrypted message]'));
+        }
+      } else {
+        decrypted.add(msg);
+      }
+    }
+    final remoteIds = rawMessages.map((message) => message.id).toSet();
+    _pendingMessages.removeWhere((id, _) => remoteIds.contains(id));
+    _messages = [
+      ...decrypted,
+      ..._pendingMessages.values,
+    ]..sort(_compareMessages);
+    _markIncomingMessagesAsRead(chatId, currentUid, rawMessages);
+    notifyListeners();
+  }
+
+  int _compareMessages(MessageModel a, MessageModel b) {
+    final aPending = _pendingMessages.containsKey(a.id);
+    final bPending = _pendingMessages.containsKey(b.id);
+    if (aPending != bPending) return aPending ? 1 : -1;
+    return a.timestamp.compareTo(b.timestamp);
+  }
+
+  void _scheduleReconnect() {
+    if (!_isListening || _reconnectTimer?.isActive == true) return;
+    _reconnectTimer = Timer(const Duration(seconds: 2), () {
+      final chatId = _activeChatId;
+      final uid = _activeUid;
+      if (!_isListening || chatId == null || uid == null) return;
+      _subscribeToMessages(chatId, uid);
+      _subscribeToTyping(chatId, uid);
+      _refreshMessages(chatId, uid);
+    });
+  }
+
   void stopListening(String chatId, String currentUid) {
+    _isListening = false;
+    _activeChatId = null;
+    _activeUid = null;
     _messagesSub?.cancel();
     _typingSub?.cancel();
     _typingTimer?.cancel();
     _readSyncTimer?.cancel();
     _readFollowUpTimer?.cancel();
+    _reconnectTimer?.cancel();
     _lastTypingState = false;
     _chatRepository.setTyping(chatId, currentUid, false).catchError((_) {});
     _chatRepository.markMessagesAsRead(chatId, currentUid).catchError((_) {});
@@ -126,8 +182,7 @@ class SecretMessageProvider extends ChangeNotifier {
       timestamp: DateTime.now(),
     );
     _pendingMessages[message.id] = message;
-    _messages = [..._messages, message]
-      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    _messages = [..._messages, message]..sort(_compareMessages);
     _isSending = true;
     notifyListeners();
     try {
@@ -323,6 +378,7 @@ class SecretMessageProvider extends ChangeNotifier {
     _typingTimer?.cancel();
     _readSyncTimer?.cancel();
     _readFollowUpTimer?.cancel();
+    _reconnectTimer?.cancel();
     super.dispose();
   }
 }
