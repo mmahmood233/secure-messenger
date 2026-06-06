@@ -18,6 +18,7 @@ import 'package:secure_messenger/presentation/chat/providers/chat_provider.dart'
 import 'package:secure_messenger/core/utils/date_formatter.dart';
 import 'package:secure_messenger/presentation/widgets/image_viewer_screen.dart';
 import 'package:secure_messenger/presentation/widgets/media_send_preview_screen.dart';
+import 'package:secure_messenger/presentation/widgets/pending_media_bubble.dart';
 import 'package:secure_messenger/presentation/widgets/user_avatar.dart';
 import 'package:secure_messenger/presentation/widgets/video_player_screen.dart';
 
@@ -36,6 +37,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final _scrollController = ScrollController();
   late MessageProvider _messageProvider;
   String? _editingMessageId;
+  int _inputResetKey = 0;
 
   @override
   void initState() {
@@ -89,12 +91,24 @@ class _ChatScreenState extends State<ChatScreen> {
     final uid = context.read<AuthProvider>().currentUser!.uid;
 
     if (_editingMessageId != null) {
+      final editingId = _editingMessageId!;
+      _messageController.clear();
+      _messageProvider.onTyping(widget.chat.id, uid, false);
+      FocusScope.of(context).unfocus();
+      setState(() {
+        _editingMessageId = null;
+        _inputResetKey++;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _editingMessageId == null) {
+          _messageController.clear();
+        }
+      });
       await _messageProvider.editMessage(
         chatId: widget.chat.id,
-        messageId: _editingMessageId!,
+        messageId: editingId,
         newContent: text,
       );
-      setState(() => _editingMessageId = null);
     } else {
       _messageController.clear();
       _messageProvider.onTyping(widget.chat.id, uid, false);
@@ -165,7 +179,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _pickAndSendAudio() async {
     final uid = context.read<AuthProvider>().currentUser!.uid;
-    final picked = await FilePicker.platform.pickFiles(type: FileType.audio);
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['mp3', 'm4a', 'aac', 'wav', 'ogg', 'flac'],
+      allowMultiple: false,
+    );
     final path = picked?.files.single.path;
     if (path == null) return;
     await _previewAndSendMedia(
@@ -278,7 +296,12 @@ class _ChatScreenState extends State<ChatScreen> {
                   Navigator.pop(context);
                   setState(() {
                     _editingMessageId = message.id;
-                    _messageController.text = message.content;
+                    _messageController.value = TextEditingValue(
+                      text: message.content,
+                      selection: TextSelection.collapsed(
+                        offset: message.content.length,
+                      ),
+                    );
                   });
                 },
               ),
@@ -332,6 +355,13 @@ class _ChatScreenState extends State<ChatScreen> {
           msg,
           context.read<AuthProvider>().currentUser!.uid,
         ),
+      ));
+    }
+    for (final upload in _messageProvider.pendingMediaUploads) {
+      items.add(PendingMediaBubble(
+        key: ValueKey('pending_media_${upload.id}'),
+        upload: upload,
+        accentColor: AppTheme.primaryColor,
       ));
     }
     if (showTyping) {
@@ -432,8 +462,12 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                   GestureDetector(
                     onTap: () {
-                      setState(() => _editingMessageId = null);
                       _messageController.clear();
+                      FocusScope.of(context).unfocus();
+                      setState(() {
+                        _editingMessageId = null;
+                        _inputResetKey++;
+                      });
                     },
                     child: const Icon(Icons.close,
                         color: AppTheme.subtitleColor, size: 18),
@@ -442,6 +476,7 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ),
           _MessageInput(
+            key: ValueKey('message_input_${_inputResetKey}_$_editingMessageId'),
             controller: _messageController,
             onSend: _sendMessage,
             onAttach: _showMediaOptions,
@@ -879,6 +914,7 @@ class _MessageInput extends StatelessWidget {
   final bool isEditing;
 
   const _MessageInput({
+    super.key,
     required this.controller,
     required this.onSend,
     required this.onAttach,

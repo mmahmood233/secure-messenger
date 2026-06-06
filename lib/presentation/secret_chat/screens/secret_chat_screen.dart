@@ -21,6 +21,7 @@ import 'package:secure_messenger/presentation/auth/providers/auth_provider.dart'
 import 'package:secure_messenger/presentation/secret_chat/providers/secret_chat_provider.dart';
 import 'package:secure_messenger/presentation/widgets/image_viewer_screen.dart';
 import 'package:secure_messenger/presentation/widgets/media_send_preview_screen.dart';
+import 'package:secure_messenger/presentation/widgets/pending_media_bubble.dart';
 import 'package:secure_messenger/presentation/widgets/user_avatar.dart';
 import 'package:secure_messenger/presentation/widgets/video_player_screen.dart';
 
@@ -40,6 +41,7 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
   final _scrollController = ScrollController();
   late SecretMessageProvider _messageProvider;
   String? _editingMessageId;
+  int _inputResetKey = 0;
 
   @override
   void initState() {
@@ -96,12 +98,24 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
     final uid = context.read<AuthProvider>().currentUser!.uid;
 
     if (_editingMessageId != null) {
+      final editingId = _editingMessageId!;
+      _messageController.clear();
+      _messageProvider.onTyping(widget.chat.id, uid, false);
+      FocusScope.of(context).unfocus();
+      setState(() {
+        _editingMessageId = null;
+        _inputResetKey++;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _editingMessageId == null) {
+          _messageController.clear();
+        }
+      });
       await _messageProvider.editMessage(
         chatId: widget.chat.id,
-        messageId: _editingMessageId!,
+        messageId: editingId,
         newContent: text,
       );
-      setState(() => _editingMessageId = null);
     } else {
       _messageController.clear();
       _messageProvider.onTyping(widget.chat.id, uid, false);
@@ -172,7 +186,11 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
 
   Future<void> _pickAndSendAudio() async {
     final uid = context.read<AuthProvider>().currentUser!.uid;
-    final picked = await FilePicker.platform.pickFiles(type: FileType.audio);
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['mp3', 'm4a', 'aac', 'wav', 'ogg', 'flac'],
+      allowMultiple: false,
+    );
     final path = picked?.files.single.path;
     if (path == null) return;
     await _previewAndSendMedia(
@@ -285,7 +303,12 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
                   Navigator.pop(context);
                   setState(() {
                     _editingMessageId = message.id;
-                    _messageController.text = message.content;
+                    _messageController.value = TextEditingValue(
+                      text: message.content,
+                      selection: TextSelection.collapsed(
+                        offset: message.content.length,
+                      ),
+                    );
                   });
                 },
               ),
@@ -333,6 +356,13 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
         isMe: msg.senderId == currentUid,
         chatId: widget.chat.id,
         onLongPress: () => _showMessageOptions(msg, currentUid),
+      ));
+    }
+    for (final upload in _messageProvider.pendingMediaUploads) {
+      items.add(PendingMediaBubble(
+        key: ValueKey('secret_pending_media_${upload.id}'),
+        upload: upload,
+        accentColor: AppTheme.secretChatColor,
       ));
     }
     if (showTyping) {
@@ -461,8 +491,12 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
                   ),
                   GestureDetector(
                     onTap: () {
-                      setState(() => _editingMessageId = null);
                       _messageController.clear();
+                      FocusScope.of(context).unfocus();
+                      setState(() {
+                        _editingMessageId = null;
+                        _inputResetKey++;
+                      });
                     },
                     child: const Icon(Icons.close,
                         color: AppTheme.subtitleColor, size: 18),
@@ -471,6 +505,9 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
               ),
             ),
           _SecretMessageInput(
+            key: ValueKey(
+              'secret_message_input_${_inputResetKey}_$_editingMessageId',
+            ),
             controller: _messageController,
             onSend: _sendMessage,
             onAttach: _showMediaOptions,
@@ -985,6 +1022,7 @@ class _SecretMessageInput extends StatelessWidget {
   final bool isEditing;
 
   const _SecretMessageInput({
+    super.key,
     required this.controller,
     required this.onSend,
     required this.onAttach,

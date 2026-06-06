@@ -6,6 +6,7 @@ import 'package:secure_messenger/core/constants/app_constants.dart';
 import 'package:secure_messenger/core/errors/app_exception.dart';
 import 'package:secure_messenger/data/models/chat_model.dart';
 import 'package:secure_messenger/data/models/message_model.dart';
+import 'package:secure_messenger/data/models/pending_media_upload.dart';
 import 'package:secure_messenger/data/repositories/chat_repository.dart';
 
 enum ChatListStatus { idle, loading, success, error }
@@ -80,6 +81,7 @@ class MessageProvider extends ChangeNotifier {
 
   List<MessageModel> _messages = [];
   final Map<String, MessageModel> _pendingMessages = {};
+  final List<PendingMediaUpload> _pendingMediaUploads = [];
   bool _isSending = false;
   String? _errorMessage;
   Map<String, bool> _typingUsers = {};
@@ -94,6 +96,8 @@ class MessageProvider extends ChangeNotifier {
   String? _activeUid;
 
   List<MessageModel> get messages => _messages;
+  List<PendingMediaUpload> get pendingMediaUploads =>
+      List.unmodifiable(_pendingMediaUploads);
   bool get isSending => _isSending;
   String? get errorMessage => _errorMessage;
   Map<String, bool> get typingUsers => _typingUsers;
@@ -159,6 +163,7 @@ class MessageProvider extends ChangeNotifier {
   ) {
     final remoteIds = messages.map((message) => message.id).toSet();
     _pendingMessages.removeWhere((id, _) => remoteIds.contains(id));
+    _pendingMediaUploads.removeWhere((upload) => remoteIds.contains(upload.id));
     _messages = [
       ...messages,
       ..._pendingMessages.values,
@@ -245,6 +250,13 @@ class MessageProvider extends ChangeNotifier {
     required File file,
     required String type,
   }) async {
+    final upload = PendingMediaUpload(
+      id: _uuid.v4(),
+      file: file,
+      type: type,
+      createdAt: DateTime.now(),
+    );
+    _pendingMediaUploads.add(upload);
     _isSending = true;
     notifyListeners();
     try {
@@ -253,9 +265,11 @@ class MessageProvider extends ChangeNotifier {
         file: file,
         type: type,
       );
-      await _chatRepository.sendMessage(
+      final sentMessage = await _chatRepository.sendMessage(
         chatId: chatId,
         senderId: senderId,
+        messageId: upload.id,
+        timestamp: upload.createdAt,
         content: type == AppConstants.imageMessage
             ? 'Photo'
             : type == AppConstants.videoMessage
@@ -264,8 +278,17 @@ class MessageProvider extends ChangeNotifier {
         type: type,
         mediaUrl: url,
       );
+      _pendingMediaUploads.removeWhere((item) => item.id == upload.id);
+      if (!_messages.any((message) => message.id == sentMessage.id)) {
+        _messages = [..._messages, sentMessage]..sort(_compareMessages);
+      }
+      await _refreshMessages(chatId, senderId);
     } on AppException catch (e) {
+      _pendingMediaUploads.removeWhere((item) => item.id == upload.id);
       _errorMessage = e.message;
+    } catch (_) {
+      _pendingMediaUploads.removeWhere((item) => item.id == upload.id);
+      _errorMessage = 'Failed to send media. Please try again.';
     } finally {
       _isSending = false;
       notifyListeners();

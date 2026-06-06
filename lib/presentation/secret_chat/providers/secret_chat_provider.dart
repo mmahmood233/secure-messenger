@@ -7,6 +7,7 @@ import 'package:secure_messenger/core/constants/app_constants.dart';
 import 'package:secure_messenger/core/errors/app_exception.dart';
 import 'package:secure_messenger/core/services/encryption_service.dart';
 import 'package:secure_messenger/data/models/message_model.dart';
+import 'package:secure_messenger/data/models/pending_media_upload.dart';
 import 'package:secure_messenger/data/repositories/chat_repository.dart';
 
 class SecretMessageProvider extends ChangeNotifier {
@@ -17,6 +18,7 @@ class SecretMessageProvider extends ChangeNotifier {
 
   List<MessageModel> _messages = [];
   final Map<String, MessageModel> _pendingMessages = {};
+  final List<PendingMediaUpload> _pendingMediaUploads = [];
   bool _isSending = false;
   String? _errorMessage;
   Map<String, bool> _typingUsers = {};
@@ -32,6 +34,8 @@ class SecretMessageProvider extends ChangeNotifier {
   String? _activeUid;
 
   List<MessageModel> get messages => _messages;
+  List<PendingMediaUpload> get pendingMediaUploads =>
+      List.unmodifiable(_pendingMediaUploads);
   bool get isSending => _isSending;
   String? get errorMessage => _errorMessage;
   Map<String, bool> get typingUsers => _typingUsers;
@@ -124,6 +128,7 @@ class SecretMessageProvider extends ChangeNotifier {
     }
     final remoteIds = rawMessages.map((message) => message.id).toSet();
     _pendingMessages.removeWhere((id, _) => remoteIds.contains(id));
+    _pendingMediaUploads.removeWhere((upload) => remoteIds.contains(upload.id));
     _messages = [
       ...decrypted,
       ..._pendingMessages.values,
@@ -211,6 +216,13 @@ class SecretMessageProvider extends ChangeNotifier {
     required File file,
     required String type,
   }) async {
+    final upload = PendingMediaUpload(
+      id: _uuid.v4(),
+      file: file,
+      type: type,
+      createdAt: DateTime.now(),
+    );
+    _pendingMediaUploads.add(upload);
     _isSending = true;
     notifyListeners();
     try {
@@ -229,15 +241,26 @@ class SecretMessageProvider extends ChangeNotifier {
               ? 'Video'
               : 'Audio';
       final encrypted = await _encryptionService.encrypt(label, chatId);
-      await _chatRepository.sendMessage(
+      final sentMessage = await _chatRepository.sendMessage(
         chatId: chatId,
         senderId: senderId,
+        messageId: upload.id,
+        timestamp: upload.createdAt,
         content: encrypted,
         type: type,
         mediaUrl: encryptedUrl,
       );
+      _pendingMediaUploads.removeWhere((item) => item.id == upload.id);
+      if (!_messages.any((message) => message.id == sentMessage.id)) {
+        _messages = [..._messages, sentMessage]..sort(_compareMessages);
+      }
+      await _refreshMessages(chatId, senderId);
     } on AppException catch (e) {
+      _pendingMediaUploads.removeWhere((item) => item.id == upload.id);
       _errorMessage = e.message;
+    } catch (_) {
+      _pendingMediaUploads.removeWhere((item) => item.id == upload.id);
+      _errorMessage = 'Failed to send media. Please try again.';
     } finally {
       _isSending = false;
       notifyListeners();

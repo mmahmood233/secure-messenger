@@ -52,6 +52,10 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^4.0.0
 
+dependency_overrides:
+  # Avoids the native-assets objective_c.framework device signing issue on iOS.
+  path_provider_foundation: 2.5.1
+
 flutter:
   uses-material-design: true
   assets:
