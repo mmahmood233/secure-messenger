@@ -17,6 +17,7 @@ import 'package:secure_messenger/presentation/auth/providers/auth_provider.dart'
 import 'package:secure_messenger/presentation/chat/providers/chat_provider.dart';
 import 'package:secure_messenger/core/utils/date_formatter.dart';
 import 'package:secure_messenger/presentation/widgets/image_viewer_screen.dart';
+import 'package:secure_messenger/presentation/widgets/media_send_preview_screen.dart';
 import 'package:secure_messenger/presentation/widgets/user_avatar.dart';
 import 'package:secure_messenger/presentation/widgets/video_player_screen.dart';
 
@@ -115,10 +116,33 @@ class _ChatScreenState extends State<ChatScreen> {
       picked = await picker.pickVideo(source: source);
     }
     if (picked == null) return;
+    await _previewAndSendMedia(
+      uid: uid,
+      file: File(picked.path),
+      type: type,
+    );
+  }
+
+  Future<void> _previewAndSendMedia({
+    required String uid,
+    required File file,
+    required String type,
+  }) async {
+    final shouldSend = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MediaSendPreviewScreen(
+          file: file,
+          type: type,
+          accentColor: AppTheme.primaryColor,
+        ),
+      ),
+    );
+    if (shouldSend != true || !mounted) return;
     await _messageProvider.sendMediaMessage(
       chatId: widget.chat.id,
       senderId: uid,
-      file: File(picked.path),
+      file: file,
       type: type,
     );
   }
@@ -130,9 +154,9 @@ class _ChatScreenState extends State<ChatScreen> {
     if (picked.isEmpty) return;
 
     for (final image in picked) {
-      await _messageProvider.sendMediaMessage(
-        chatId: widget.chat.id,
-        senderId: uid,
+      if (!mounted) return;
+      await _previewAndSendMedia(
+        uid: uid,
         file: File(image.path),
         type: AppConstants.imageMessage,
       );
@@ -144,9 +168,8 @@ class _ChatScreenState extends State<ChatScreen> {
     final picked = await FilePicker.platform.pickFiles(type: FileType.audio);
     final path = picked?.files.single.path;
     if (path == null) return;
-    await _messageProvider.sendMediaMessage(
-      chatId: widget.chat.id,
-      senderId: uid,
+    await _previewAndSendMedia(
+      uid: uid,
       file: File(path),
       type: AppConstants.audioMessage,
     );

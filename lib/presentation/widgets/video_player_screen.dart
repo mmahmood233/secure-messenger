@@ -62,7 +62,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
       ),
-      body: Center(
+      body: SafeArea(
         child: _hasError
             ? const Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -76,26 +76,44 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             : !_isInitialized
                 ? const CircularProgressIndicator(color: AppTheme.primaryColor)
                 : Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      if (widget.isAudio)
-                        const Icon(Icons.audiotrack,
-                            color: Colors.white, size: 88)
-                      else
-                        AspectRatio(
-                          aspectRatio: _controller.value.aspectRatio,
-                          child: VideoPlayer(_controller),
+                      Expanded(
+                        child: Center(
+                          child: widget.isAudio
+                              ? const Icon(Icons.audiotrack,
+                                  color: Colors.white, size: 88)
+                              : LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    final aspect =
+                                        _controller.value.aspectRatio;
+                                    final maxWidth = constraints.maxWidth;
+                                    final maxHeight = constraints.maxHeight;
+                                    var width = maxWidth;
+                                    var height = width / aspect;
+                                    if (height > maxHeight) {
+                                      height = maxHeight;
+                                      width = height * aspect;
+                                    }
+                                    return SizedBox(
+                                      width: width,
+                                      height: height,
+                                      child: VideoPlayer(_controller),
+                                    );
+                                  },
+                                ),
                         ),
-                      const SizedBox(height: 16),
-                      VideoProgressIndicator(
-                        _controller,
-                        allowScrubbing: true,
-                        colors: const VideoProgressColors(
-                          playedColor: AppTheme.primaryColor,
-                          bufferedColor: Colors.white24,
-                          backgroundColor: Colors.white12,
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+                        child: VideoProgressIndicator(
+                          _controller,
+                          allowScrubbing: true,
+                          colors: const VideoProgressColors(
+                            playedColor: AppTheme.primaryColor,
+                            bufferedColor: Colors.white24,
+                            backgroundColor: Colors.white12,
+                          ),
                         ),
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
                       ),
                       const SizedBox(height: 12),
                       Row(
@@ -142,6 +160,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                           ),
                         ],
                       ),
+                      const SizedBox(height: 12),
                     ],
                   ),
       ),
