@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
@@ -127,7 +128,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: QrImageView(
-                  data: 'securemessenger://user/${user.uid}',
+                  data: _profileQrData(user),
                   version: QrVersions.auto,
                   size: 200,
                   backgroundColor: Colors.white,
@@ -157,6 +158,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
     );
+  }
+
+  String _profileQrData(UserModel user) {
+    return jsonEncode({
+      'type': 'securemessenger_profile',
+      'uid': user.uid,
+      'username': user.username,
+      'displayName': user.displayName,
+      'photoUrl': user.photoUrl,
+      'bio': user.bio,
+    });
   }
 
   void _showBiometricSettings() {

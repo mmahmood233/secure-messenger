@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -504,6 +506,22 @@ class _QrScannerScreen extends StatefulWidget {
 class _QrScannerScreenState extends State<_QrScannerScreen> {
   bool _scanned = false;
 
+  String? _uidFromQrValue(String raw) {
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic> &&
+          decoded['type'] == 'securemessenger_profile' &&
+          decoded['uid'] is String) {
+        return decoded['uid'] as String;
+      }
+    } catch (_) {}
+
+    const legacyPrefix = 'securemessenger://user/';
+    if (!raw.startsWith(legacyPrefix)) return null;
+    final uid = raw.replaceFirst(legacyPrefix, '').split('?').first;
+    return uid.isEmpty ? null : uid;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -515,10 +533,10 @@ class _QrScannerScreenState extends State<_QrScannerScreen> {
           if (barcode?.rawValue == null) return;
 
           final raw = barcode!.rawValue!;
-          if (!raw.startsWith('securemessenger://user/')) return;
+          final uid = _uidFromQrValue(raw);
+          if (uid == null) return;
 
           _scanned = true;
-          final uid = raw.replaceFirst('securemessenger://user/', '');
 
           final contacts = context.read<ContactsProvider>();
           final auth = context.read<AuthProvider>();

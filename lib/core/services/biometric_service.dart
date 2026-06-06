@@ -32,7 +32,7 @@ class BiometricService {
       return await _localAuth.authenticate(
         localizedReason: 'Authenticate to access SecureMessenger',
         options: const AuthenticationOptions(
-          biometricOnly: false,
+          biometricOnly: true,
           stickyAuth: true,
           useErrorDialogs: true,
         ),
