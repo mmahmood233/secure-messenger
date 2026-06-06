@@ -23,6 +23,7 @@ class AuthProvider extends ChangeNotifier {
   bool _biometricAvailable = false;
   bool _biometricEnabled = false;
   bool _biometricUnlockInProgress = false;
+  bool _accountCreationInProgress = false;
 
   AuthStatus get status => _status;
   UserModel? get currentUser => _currentUser;
@@ -40,11 +41,29 @@ class AuthProvider extends ChangeNotifier {
     _biometricEnabled = await _biometricService.isBiometricEnabled();
 
     _authRepository.authStateChanges.listen((state) async {
+      final isCreatingAccount = _accountCreationInProgress;
       if (state.session?.user != null) {
-        _currentUser = await _authRepository.getCurrentUserProfile();
-        if (_currentUser == null) {
-          _status = AuthStatus.error;
-          _errorMessage = 'User profile not found. Please sign in again.';
+        var profile = await _authRepository.getCurrentUserProfile();
+        if (profile == null && isCreatingAccount) {
+          for (var attempt = 0; attempt < 4; attempt++) {
+            await Future<void>.delayed(const Duration(milliseconds: 250));
+            profile = await _authRepository.getCurrentUserProfile();
+            if (profile != null) break;
+          }
+        }
+        if (profile == null && isCreatingAccount && _currentUser != null) {
+          profile = _currentUser;
+        }
+
+        _currentUser = profile;
+        if (profile == null) {
+          if (isCreatingAccount || _accountCreationInProgress) {
+            _status = AuthStatus.loading;
+            _errorMessage = null;
+          } else {
+            _status = AuthStatus.error;
+            _errorMessage = 'User profile not found. Please sign in again.';
+          }
         } else {
           _status = _biometricEnabled && !_biometricUnlockInProgress
               ? AuthStatus.biometricLocked
@@ -66,6 +85,7 @@ class AuthProvider extends ChangeNotifier {
     required String displayName,
   }) async {
     _setLoading();
+    _accountCreationInProgress = true;
     try {
       _currentUser = await _authRepository.signUp(
         email: email,
@@ -73,11 +93,18 @@ class AuthProvider extends ChangeNotifier {
         username: username,
         displayName: displayName,
       );
+      _accountCreationInProgress = false;
       _status = AuthStatus.authenticated;
+      _errorMessage = null;
       notifyListeners();
       return true;
     } on AppException catch (e) {
+      _accountCreationInProgress = false;
       _setError(e.message);
+      return false;
+    } catch (e) {
+      _accountCreationInProgress = false;
+      _setError(e.toString());
       return false;
     }
   }

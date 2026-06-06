@@ -459,20 +459,29 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
             ),
           ),
           Expanded(
-            child: AnimatedBuilder(
-              animation: _messageProvider,
-              builder: (_, __) {
-                final messages = _messageProvider.messages;
-                final items =
-                    _buildItemList(messages, _isOtherUserTyping(), currentUid);
-                return ListView.builder(
-                  controller: _scrollController,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  itemCount: items.length,
-                  itemBuilder: (_, i) => items[i],
-                );
-              },
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () => FocusScope.of(context).unfocus(),
+              child: AnimatedBuilder(
+                animation: _messageProvider,
+                builder: (_, __) {
+                  final messages = _messageProvider.messages;
+                  final items = _buildItemList(
+                    messages,
+                    _isOtherUserTyping(),
+                    currentUid,
+                  );
+                  return ListView.builder(
+                    controller: _scrollController,
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    itemCount: items.length,
+                    itemBuilder: (_, i) => items[i],
+                  );
+                },
+              ),
             ),
           ),
           if (_editingMessageId != null)

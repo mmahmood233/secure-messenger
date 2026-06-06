@@ -1,6 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:secure_messenger/core/errors/app_exception.dart';
 import 'package:secure_messenger/core/theme/app_theme.dart';
+import 'package:secure_messenger/data/repositories/user_repository.dart';
 import 'package:secure_messenger/presentation/auth/providers/auth_provider.dart';
 import 'package:secure_messenger/presentation/widgets/app_text_field.dart';
 import 'package:secure_messenger/presentation/widgets/app_button.dart';
@@ -20,8 +25,10 @@ class _SignupScreenState extends State<SignupScreen> {
   final _confirmPasswordController = TextEditingController();
   final _usernameController = TextEditingController();
   final _displayNameController = TextEditingController();
+  File? _selectedImage;
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
+  bool _isUploadingPhoto = false;
 
   @override
   void dispose() {
@@ -36,15 +43,105 @@ class _SignupScreenState extends State<SignupScreen> {
   Future<void> _signUp() async {
     if (!_formKey.currentState!.validate()) return;
     final auth = context.read<AuthProvider>();
+    final userRepository = context.read<UserRepository>();
+    final selectedImage = _selectedImage;
     final success = await auth.signUp(
       email: _emailController.text.trim(),
       password: _passwordController.text,
       username: _usernameController.text.trim(),
       displayName: _displayNameController.text.trim(),
     );
-    if (success && mounted) {
+    if (!success || !mounted) return;
+
+    if (selectedImage != null && auth.currentUser != null) {
+      setState(() => _isUploadingPhoto = true);
+      try {
+        final url = await userRepository.uploadProfilePhoto(
+          auth.currentUser!.uid,
+          selectedImage,
+        );
+        auth.updateCurrentUser(auth.currentUser!.copyWith(photoUrl: url));
+      } on AppException catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(e.message),
+              backgroundColor: AppTheme.errorColor,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isUploadingPhoto = false);
+      }
+    }
+
+    if (mounted) {
       Navigator.pop(context);
     }
+  }
+
+  Future<void> _pickProfileImage(ImageSource source) async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: source,
+      imageQuality: 80,
+      maxWidth: 512,
+      maxHeight: 512,
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _selectedImage = File(picked.path));
+  }
+
+  void _showPhotoOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.cardColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined,
+                    color: AppTheme.primaryColor),
+                title: const Text('Choose from Photos',
+                    style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickProfileImage(ImageSource.gallery);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.camera_alt_outlined,
+                    color: AppTheme.primaryColor),
+                title: const Text('Take Photo',
+                    style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickProfileImage(ImageSource.camera);
+                },
+              ),
+              if (_selectedImage != null)
+                ListTile(
+                  leading: const Icon(Icons.delete_outline,
+                      color: AppTheme.errorColor),
+                  title: const Text('Remove Photo',
+                      style: TextStyle(color: AppTheme.errorColor)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    setState(() => _selectedImage = null);
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -83,7 +180,65 @@ class _SignupScreenState extends State<SignupScreen> {
                         color: AppTheme.subtitleColor,
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
+                    Center(
+                      child: GestureDetector(
+                        onTap: _showPhotoOptions,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            CircleAvatar(
+                              radius: 46,
+                              backgroundColor:
+                                  AppTheme.primaryColor.withOpacity(0.16),
+                              backgroundImage: _selectedImage != null
+                                  ? FileImage(_selectedImage!)
+                                  : null,
+                              child: _selectedImage == null
+                                  ? const Icon(
+                                      Icons.person_outline,
+                                      color: AppTheme.primaryColor,
+                                      size: 44,
+                                    )
+                                  : null,
+                            ),
+                            Positioned(
+                              right: -2,
+                              bottom: -2,
+                              child: Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primaryColor,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: AppTheme.backgroundColor,
+                                    width: 3,
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.camera_alt,
+                                  color: Colors.white,
+                                  size: 16,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Center(
+                      child: TextButton(
+                        onPressed: _showPhotoOptions,
+                        child: Text(
+                          _selectedImage == null
+                              ? 'Add profile photo'
+                              : 'Change profile photo',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
                     if (auth.errorMessage != null) ...[
                       ErrorBanner(
                         message: auth.errorMessage!,
@@ -194,8 +349,11 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     const SizedBox(height: 24),
                     AppButton(
-                      label: 'Create Account',
-                      isLoading: auth.status == AuthStatus.loading,
+                      label: _isUploadingPhoto
+                          ? 'Uploading Photo...'
+                          : 'Create Account',
+                      isLoading: auth.status == AuthStatus.loading ||
+                          _isUploadingPhoto,
                       onPressed: _signUp,
                     ),
                     const SizedBox(height: 16),
