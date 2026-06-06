@@ -39,7 +39,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
     super.dispose();
   }
 
-  void _openChat(UserModel contact) async {
+  Future<void> _openChat(UserModel contact) async {
     final auth = context.read<AuthProvider>();
     final chatRepo = context.read<ChatRepository>();
     final chat = await chatRepo.getOrCreateChat(
@@ -51,6 +51,38 @@ class _ContactsScreenState extends State<ContactsScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => ChatScreen(chat: chat, otherUser: contact),
+      ),
+    );
+  }
+
+  Future<void> _openSecretChat(UserModel contact) async {
+    final auth = context.read<AuthProvider>();
+    final chatRepo = context.read<ChatRepository>();
+    final chat = await chatRepo.getOrCreateChat(
+      auth.currentUser!.uid,
+      contact.uid,
+      isSecret: true,
+    );
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SecretChatScreen(chat: chat, otherUser: contact),
+      ),
+    );
+  }
+
+  void _showContactActions(UserModel contact) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.cardColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _ContactActionSheet(
+        user: contact,
+        onChat: () => _openChat(contact),
+        onSecretChat: () => _openSecretChat(contact),
       ),
     );
   }
@@ -142,7 +174,9 @@ class _ContactsScreenState extends State<ContactsScreen> {
             itemBuilder: (_, i) {
               final contact = contacts.contacts[i];
               return _ContactTile(
-                  contact: contact, onTap: () => _openChat(contact));
+                contact: contact,
+                onTap: () => _showContactActions(contact),
+              );
             },
           );
         },
@@ -181,6 +215,99 @@ class _ContactTile extends StatelessWidget {
           style: const TextStyle(color: AppTheme.subtitleColor, fontSize: 14)),
       trailing:
           const Icon(Icons.chat_bubble_outline, color: AppTheme.primaryColor),
+    );
+  }
+}
+
+class _ContactActionSheet extends StatelessWidget {
+  final UserModel user;
+  final VoidCallback onChat;
+  final VoidCallback onSecretChat;
+
+  const _ContactActionSheet({
+    required this.user,
+    required this.onChat,
+    required this.onSecretChat,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            UserAvatar(
+              photoUrl: user.photoUrl,
+              displayName: user.displayName,
+              radius: 36,
+              showOnlineIndicator: true,
+              isOnline: user.isOnline,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              user.displayName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            Text(
+              '@${user.username}',
+              style: const TextStyle(
+                color: AppTheme.subtitleColor,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      onChat();
+                    },
+                    icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                    label: const Text('Message'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryColor,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      onSecretChat();
+                    },
+                    icon: const Icon(Icons.lock_outline, size: 18),
+                    label: const Text('Secret Chat'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.secretChatColor,
+                      side: const BorderSide(color: AppTheme.secretChatColor),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

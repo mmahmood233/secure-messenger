@@ -36,6 +36,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
   late MessageProvider _messageProvider;
+  late String _currentUid;
   String? _editingMessageId;
   int _inputResetKey = 0;
 
@@ -43,8 +44,8 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     _messageProvider = MessageProvider(context.read());
-    final uid = context.read<AuthProvider>().currentUser!.uid;
-    _messageProvider.startListening(widget.chat.id, uid);
+    _currentUid = context.read<AuthProvider>().currentUser!.uid;
+    _messageProvider.startListening(widget.chat.id, _currentUid);
     _messageProvider.addListener(_onProviderUpdate);
   }
 
@@ -64,8 +65,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
-    final uid = context.read<AuthProvider>().currentUser?.uid ?? '';
-    _messageProvider.stopListening(widget.chat.id, uid);
+    _messageProvider.stopListening(widget.chat.id, _currentUid);
     _messageProvider.removeListener(_onProviderUpdate);
     _messageProvider.dispose();
     _messageController.dispose();

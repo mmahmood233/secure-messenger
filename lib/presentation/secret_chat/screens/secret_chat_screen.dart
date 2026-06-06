@@ -40,6 +40,7 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
   late SecretMessageProvider _messageProvider;
+  late String _currentUid;
   String? _editingMessageId;
   int _inputResetKey = 0;
 
@@ -50,8 +51,8 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
       context.read<ChatRepository>(),
       context.read<EncryptionService>(),
     );
-    final uid = context.read<AuthProvider>().currentUser!.uid;
-    _messageProvider.initChat(widget.chat.id, uid);
+    _currentUid = context.read<AuthProvider>().currentUser!.uid;
+    _messageProvider.initChat(widget.chat.id, _currentUid);
     _messageProvider.addListener(_onProviderUpdate);
   }
 
@@ -71,8 +72,7 @@ class _SecretChatScreenState extends State<SecretChatScreen> {
 
   @override
   void dispose() {
-    final uid = context.read<AuthProvider>().currentUser?.uid ?? '';
-    _messageProvider.stopListening(widget.chat.id, uid);
+    _messageProvider.stopListening(widget.chat.id, _currentUid);
     _messageProvider.removeListener(_onProviderUpdate);
     _messageProvider.dispose();
     _messageController.dispose();
