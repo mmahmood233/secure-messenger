@@ -1,3 +1,4 @@
+// Reusable avatar widget with initials fallback and optional online indicator.
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:secure_messenger/core/theme/app_theme.dart';
@@ -20,6 +21,7 @@ class UserAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Prefer a network photo, then fall back to initials from the display name.
     return Stack(
       children: [
         CircleAvatar(

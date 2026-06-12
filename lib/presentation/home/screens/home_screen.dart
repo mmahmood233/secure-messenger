@@ -1,3 +1,6 @@
+// Home screen.
+// Main authenticated area with normal chats, secret chats, contacts, and profile
+// navigation.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:secure_messenger/core/utils/date_formatter.dart';

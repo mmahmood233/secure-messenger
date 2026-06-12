@@ -1,3 +1,4 @@
+// Banner shown when the device is offline.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:secure_messenger/core/services/connectivity_service.dart';

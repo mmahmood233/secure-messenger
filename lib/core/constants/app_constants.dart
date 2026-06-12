@@ -1,3 +1,6 @@
+// Shared constants used across the app.
+// Keeping table names, storage keys, message types, and timeouts here avoids
+// repeating raw strings in many files.
 class AppConstants {
   static const String appName = 'SecureMessenger';
 

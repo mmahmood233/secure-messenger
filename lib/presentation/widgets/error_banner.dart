@@ -1,3 +1,4 @@
+// Small dismissible error banner used to show validation or network errors.
 import 'package:flutter/material.dart';
 import 'package:secure_messenger/core/theme/app_theme.dart';
 

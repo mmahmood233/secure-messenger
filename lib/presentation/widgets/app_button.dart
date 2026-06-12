@@ -1,3 +1,4 @@
+// Reusable app button with filled and outlined variants.
 import 'package:flutter/material.dart';
 import 'package:secure_messenger/core/theme/app_theme.dart';
 
@@ -21,6 +22,7 @@ class AppButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // One button component keeps loading state, icons, and sizing consistent.
     if (variant == AppButtonVariant.outlined) {
       return SizedBox(
         width: double.infinity,

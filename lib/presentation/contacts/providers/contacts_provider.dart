@@ -1,3 +1,5 @@
+// Contacts provider.
+// Manages contact loading, user search, and adding contacts.
 import 'package:flutter/foundation.dart';
 import 'package:secure_messenger/core/errors/app_exception.dart';
 import 'package:secure_messenger/data/models/user_model.dart';

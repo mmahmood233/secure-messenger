@@ -1,3 +1,6 @@
+// Secret chat screen.
+// UI for encrypted one-on-one conversations with text/media, typing indicators,
+// read receipts, edit, and delete.
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';

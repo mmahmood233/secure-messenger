@@ -1,3 +1,4 @@
+// Chat bubble displayed while a media file is uploading.
 import 'package:flutter/material.dart';
 import 'package:secure_messenger/core/constants/app_constants.dart';
 import 'package:secure_messenger/data/models/pending_media_upload.dart';

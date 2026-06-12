@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+// Full-screen image viewer for chat media.
 import 'package:flutter/material.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:secure_messenger/core/theme/app_theme.dart';

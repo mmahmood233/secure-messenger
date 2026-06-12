@@ -1,5 +1,6 @@
 import 'dart:io';
 
+// Full-screen video player for chat media.
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:secure_messenger/core/theme/app_theme.dart';

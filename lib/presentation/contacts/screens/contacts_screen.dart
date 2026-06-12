@@ -1,3 +1,6 @@
+// Contacts screen.
+// Shows saved contacts, searches users by username, scans profile QR codes, and
+// starts normal or secret chats.
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -42,6 +45,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
   }
 
   Future<void> _openChat(UserModel contact) async {
+    // Normal chats use plaintext messages protected by Supabase auth/RLS.
     final auth = context.read<AuthProvider>();
     final chatRepo = context.read<ChatRepository>();
     final chat = await chatRepo.getOrCreateChat(
@@ -58,6 +62,8 @@ class _ContactsScreenState extends State<ContactsScreen> {
   }
 
   Future<void> _openSecretChat(UserModel contact) async {
+    // Secret chats use the same chat table, but the messages are encrypted
+    // before they are stored.
     final auth = context.read<AuthProvider>();
     final chatRepo = context.read<ChatRepository>();
     final chat = await chatRepo.getOrCreateChat(

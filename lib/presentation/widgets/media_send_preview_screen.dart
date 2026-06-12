@@ -1,3 +1,4 @@
+// Preview screen shown before sending selected image, video, or audio media.
 import 'dart:io';
 
 import 'package:flutter/material.dart';

@@ -1,3 +1,5 @@
+// Public profile screen for another user.
+// Shows profile details and offers add contact, normal chat, and secret chat.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';

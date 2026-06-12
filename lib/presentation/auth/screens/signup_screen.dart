@@ -1,3 +1,5 @@
+// Signup screen.
+// Creates a new Supabase account and the initial user profile.
 import 'dart:io';
 
 import 'package:flutter/material.dart';

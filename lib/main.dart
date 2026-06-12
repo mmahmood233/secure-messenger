@@ -1,3 +1,10 @@
+// App entry point.
+//
+// This file builds the dependency graph for the app. It creates the services,
+// repositories, and providers that the UI uses later.
+//
+// Flow:
+// main() -> Supabase.initialize() -> SecureMessengerApp -> MultiProvider
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -34,22 +41,28 @@ class SecureMessengerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // One secure storage instance is shared by biometrics and encryption. It is
+    // used for biometric credentials, RSA private keys, and secret chat keys.
     const secureStorage = FlutterSecureStorage(
       aOptions: AndroidOptions(encryptedSharedPreferences: true),
       iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
     );
 
+    // Services wrap platform/security packages.
     final encryptionService = EncryptionService(secureStorage);
     final biometricService =
         BiometricService(LocalAuthentication(), secureStorage);
     final supabase = Supabase.instance.client;
 
+    // Repositories are the data layer. They are the only classes that should
+    // directly talk to Supabase tables/auth/storage.
     final authRepo = AuthRepository(supabase, encryptionService);
     final userRepo = UserRepository(supabase);
     final chatRepo = ChatRepository(supabase);
 
     return MultiProvider(
       providers: [
+        // Plain Provider is used for shared services/repositories.
         Provider<FlutterSecureStorage>.value(value: secureStorage),
         Provider<EncryptionService>.value(value: encryptionService),
         Provider<BiometricService>.value(value: biometricService),
@@ -57,6 +70,7 @@ class SecureMessengerApp extends StatelessWidget {
         Provider<UserRepository>.value(value: userRepo),
         Provider<ChatRepository>.value(value: chatRepo),
         ChangeNotifierProvider(
+          // ChangeNotifierProvider is used for UI state that changes over time.
           create: (_) => AuthProvider(authRepo, biometricService),
         ),
         ChangeNotifierProvider(
@@ -89,6 +103,10 @@ class _AppRouter extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<AuthProvider>(
       builder: (context, auth, _) {
+        // The whole app navigation depends on AuthProvider.status:
+        // authenticated -> HomeScreen
+        // unauthenticated/error/biometricLocked -> LoginScreen
+        // initial/loading -> splash screen
         final status = auth.status;
         switch (status) {
           case AuthStatus.initial:

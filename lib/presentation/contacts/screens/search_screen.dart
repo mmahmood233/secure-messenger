@@ -1,3 +1,5 @@
+// Search screen.
+// Focused user-search page for finding people and starting a chat.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:secure_messenger/core/theme/app_theme.dart';

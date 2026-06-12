@@ -1,3 +1,11 @@
+// Normal chat providers.
+//
+// There are two state managers in this file:
+// - ChatProvider watches the chat lists shown on the Home screen.
+// - MessageProvider manages one currently open normal chat.
+//
+// Normal chat messages are not end-to-end encrypted. They are protected by
+// Supabase authentication/RLS, but the message content is stored as plaintext.
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -30,6 +38,8 @@ class ChatProvider extends ChangeNotifier {
   ChatProvider(this._chatRepository);
 
   void startListening(String uid) {
+    // Watch normal and secret chat lists separately so the Home tabs can render
+    // each list independently and show different empty states/icons.
     _chatsSub?.cancel();
     _secretChatsSub?.cancel();
 
@@ -108,6 +118,8 @@ class MessageProvider extends ChangeNotifier {
   MessageProvider(this._chatRepository);
 
   void startListening(String chatId, String currentUid) {
+    // Start realtime message and typing subscriptions for the active chat. This
+    // method is called when ChatScreen opens.
     _isListening = true;
     _activeChatId = chatId;
     _activeUid = currentUid;
@@ -129,6 +141,8 @@ class MessageProvider extends ChangeNotifier {
     _messagesSub?.cancel();
     _messagesSub = _chatRepository.watchMessages(chatId).listen(
       (messages) {
+        // Normal messages already contain display-ready content because they are
+        // not encrypted.
         _applyMessages(messages, chatId, currentUid);
       },
       onError: (e) {
@@ -142,6 +156,8 @@ class MessageProvider extends ChangeNotifier {
     _typingSub?.cancel();
     _typingSub = _chatRepository.watchTyping(chatId).listen(
       (typing) {
+        // Remove the current user from the map so the UI only shows when the
+        // other participant is typing.
         _typingUsers = Map.from(typing)..remove(currentUid);
         notifyListeners();
       },
@@ -151,6 +167,7 @@ class MessageProvider extends ChangeNotifier {
 
   Future<void> _refreshMessages(String chatId, String currentUid) async {
     try {
+      // Initial load and fallback if realtime temporarily fails.
       final messages = await _chatRepository.getMessages(chatId);
       _applyMessages(messages, chatId, currentUid);
     } catch (_) {}
@@ -161,6 +178,8 @@ class MessageProvider extends ChangeNotifier {
     String chatId,
     String currentUid,
   ) {
+    // Merge confirmed Supabase messages with any local pending messages. When a
+    // pending id appears in Supabase, the local pending copy is removed.
     final remoteIds = messages.map((message) => message.id).toSet();
     _pendingMessages.removeWhere((id, _) => remoteIds.contains(id));
     _pendingMediaUploads.removeWhere((upload) => remoteIds.contains(upload.id));
@@ -181,6 +200,7 @@ class MessageProvider extends ChangeNotifier {
 
   void _scheduleReconnect() {
     if (!_isListening || _reconnectTimer?.isActive == true) return;
+    // Reconnect once after a short delay and refresh from the database.
     _reconnectTimer = Timer(const Duration(seconds: 2), () {
       final chatId = _activeChatId;
       final uid = _activeUid;
@@ -192,6 +212,8 @@ class MessageProvider extends ChangeNotifier {
   }
 
   void stopListening(String chatId, String currentUid) {
+    // Called when the chat screen closes. It clears subscriptions and makes sure
+    // typing is turned off for this user.
     _isListening = false;
     _activeChatId = null;
     _activeUid = null;
@@ -213,6 +235,7 @@ class MessageProvider extends ChangeNotifier {
   }) async {
     if (content.trim().isEmpty) return;
     final trimmed = content.trim();
+    // Add a local pending message immediately so the UI feels responsive.
     final message = MessageModel(
       id: _uuid.v4(),
       senderId: senderId,
@@ -226,6 +249,8 @@ class MessageProvider extends ChangeNotifier {
     _isSending = true;
     notifyListeners();
     try {
+      // Normal chats store plaintext content. Secret chats use a different
+      // provider that encrypts before calling the repository.
       await _chatRepository.sendMessage(
         chatId: chatId,
         senderId: senderId,
@@ -250,6 +275,8 @@ class MessageProvider extends ChangeNotifier {
     required File file,
     required String type,
   }) async {
+    // Show a pending upload bubble while the file uploads to Supabase Storage.
+    // After upload, the message row stores the storage path in media_url.
     final upload = PendingMediaUpload(
       id: _uuid.v4(),
       file: file,
@@ -301,6 +328,8 @@ class MessageProvider extends ChangeNotifier {
     required String newContent,
   }) async {
     try {
+      // The repository updates the existing row, so all participants see the new
+      // content through the realtime stream.
       await _chatRepository.editMessage(
         chatId: chatId,
         messageId: messageId,
@@ -317,6 +346,8 @@ class MessageProvider extends ChangeNotifier {
     required String messageId,
   }) async {
     try {
+      // Delete is a soft delete. The row remains, but the UI shows a deleted
+      // message state for everyone.
       await _chatRepository.deleteMessage(
         chatId: chatId,
         messageId: messageId,
@@ -329,6 +360,7 @@ class MessageProvider extends ChangeNotifier {
 
   void onTyping(String chatId, String uid, bool isTyping) {
     _typingTimer?.cancel();
+    // Avoid sending duplicate typing writes for the same state.
     if (_lastTypingState != isTyping) {
       _lastTypingState = isTyping;
       _chatRepository.setTyping(chatId, uid, isTyping).catchError((_) {});
@@ -346,6 +378,8 @@ class MessageProvider extends ChangeNotifier {
     String currentUid,
     List<MessageModel> messages,
   ) {
+    // Only mark incoming messages as read. A user's own messages should keep
+    // their status until the other participant opens the chat.
     final hasUnreadIncoming = messages.any(
       (message) =>
           message.senderId != currentUid &&
@@ -369,6 +403,8 @@ class MessageProvider extends ChangeNotifier {
 
   void _syncReadState(String chatId, String currentUid) {
     if (_markingRead) return;
+    // Prevent duplicate read-receipt writes when realtime emits several message
+    // updates close together.
     _markingRead = true;
     _chatRepository.markMessagesAsRead(chatId, currentUid).catchError((_) {
       return;

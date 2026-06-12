@@ -1,3 +1,4 @@
+// Reusable styled text field used by auth and profile forms.
 import 'package:flutter/material.dart';
 
 class AppTextField extends StatelessWidget {

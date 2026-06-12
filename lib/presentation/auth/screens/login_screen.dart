@@ -1,3 +1,6 @@
+// Login screen.
+// Lets users sign in with email/password or unlock using biometrics when it is
+// enabled on the device.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:secure_messenger/core/theme/app_theme.dart';
@@ -30,6 +33,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
+    // AuthProvider handles the Supabase call and updates the router state.
     final auth = context.read<AuthProvider>();
     await auth.signIn(
       email: _emailController.text.trim(),
@@ -48,6 +52,7 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       return;
     }
+    // The provider asks the OS for Face ID/fingerprint before unlocking.
     final authenticated = await auth.authenticateWithBiometric();
     if (!authenticated && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

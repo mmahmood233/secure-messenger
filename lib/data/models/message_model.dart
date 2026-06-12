@@ -1,3 +1,11 @@
+// Data model for one message row.
+//
+// content means different things depending on the chat:
+// - Normal text chat: plaintext message.
+// - Secret text chat: encrypted payload.
+// - Media message: a label such as Photo, Video, or Audio.
+//
+// mediaUrl stores the Supabase Storage path for image/video/audio messages.
 import 'package:secure_messenger/core/constants/app_constants.dart';
 
 class MessageModel {
@@ -26,6 +34,8 @@ class MessageModel {
   });
 
   factory MessageModel.fromMap(Map<String, dynamic> map, String id) {
+    // Accepts both Dart-style keys and Supabase snake_case keys, so the same
+    // model works for app-created maps and Supabase rows.
     return MessageModel(
       id: id,
       senderId: map['senderId'] ?? map['sender_id'] ?? '',
@@ -45,6 +55,9 @@ class MessageModel {
   }
 
   Map<String, dynamic> toMap() {
+    // Converts the message to the Supabase messages-table shape.
+    // The repository adds chat_id when inserting because chat_id is not part of
+    // the reusable MessageModel itself.
     return {
       'id': id,
       'sender_id': senderId,
@@ -86,6 +99,8 @@ class MessageModel {
   }
 
   static DateTime? _parseDate(dynamic value) {
+    // Supabase timestamps arrive as strings; local code may already have a
+    // DateTime when creating pending messages.
     if (value == null) return null;
     if (value is DateTime) return value;
     if (value is String) return DateTime.tryParse(value)?.toLocal();

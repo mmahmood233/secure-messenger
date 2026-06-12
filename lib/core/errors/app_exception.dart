@@ -1,3 +1,5 @@
+// App-specific exception classes and auth error mapping.
+// These give the UI clean messages instead of exposing raw backend errors.
 class AppException implements Exception {
   final String message;
   final String? code;

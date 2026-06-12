@@ -1,7 +1,9 @@
+// Date formatting helpers for chat timestamps and profile/status text.
 import 'package:intl/intl.dart';
 
 class DateFormatter {
   static String formatMessageTime(DateTime time) {
+    // Chat lists and bubbles use a compact label based on how old the time is.
     final now = DateTime.now();
     final diff = now.difference(time);
 

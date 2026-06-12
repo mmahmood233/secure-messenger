@@ -1,3 +1,6 @@
+// Current user's profile screen.
+// Allows editing profile details, uploading a profile photo, showing a QR code,
+// managing biometric login, and signing out.
 import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -63,6 +66,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
+    // Save the photo first so the updated user object can include the new URL.
     final auth = context.read<AuthProvider>();
     final profile = context.read<ProfileProvider>();
     final uid = auth.currentUser!.uid;
@@ -161,6 +165,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   String _profileQrData(UserModel user) {
+    // The QR payload includes enough profile information for another user to
+    // identify and add this account.
     return jsonEncode({
       'type': 'securemessenger_profile',
       'uid': user.uid,
@@ -172,6 +178,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showBiometricSettings() {
+    // Enabling biometrics requires the current password so future biometric
+    // login can re-authenticate with Supabase.
     final auth = context.read<AuthProvider>();
     final passwordController = TextEditingController();
     bool obscurePassword = true;

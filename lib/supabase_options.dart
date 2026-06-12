@@ -1,3 +1,5 @@
+// Supabase project configuration.
+// Replace these values with the Project URL and anon public key from Supabase.
 class SupabaseOptions {
   static const url = 'https://zofrezlntcguprrqcpzm.supabase.co';
   static const anonKey =

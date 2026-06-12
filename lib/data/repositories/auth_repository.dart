@@ -1,3 +1,13 @@
+// Authentication repository.
+//
+// This is the backend-facing part of login/signup. Screens and providers do not
+// call Supabase Auth directly; they call this repository instead.
+//
+// Responsibilities:
+// - Create and sign in Supabase Auth users.
+// - Create/load the matching row in the profiles table.
+// - Update online status when users sign in/out.
+// - Make sure every user has an RSA public key for secret chats.
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import 'package:secure_messenger/core/errors/app_exception.dart';
 import 'package:secure_messenger/core/services/encryption_service.dart';
@@ -20,6 +30,9 @@ class AuthRepository {
     required String displayName,
   }) async {
     try {
+      // Check username first because Supabase Auth only knows about email.
+      // Usernames are stored lowercase so searching and duplicate checks are
+      // consistent.
       final existing = await _client
           .from('profiles')
           .select('id')
@@ -36,11 +49,15 @@ class AuthRepository {
       );
       final authUser = response.user;
       if (authUser == null) {
+        // This can happen when email confirmation is required. The account may
+        // exist, but the app cannot create a profile until a user id is present.
         throw const AuthException(
           'Account created. Please verify your email, then sign in.',
         );
       }
 
+      // Create the local RSA identity key pair now. The profile stores only the
+      // public key; the private key stays on this device.
       final publicKey = await _encryptionService.ensureIdentityKeyPair();
       final user = UserModel(
         uid: authUser.id,
@@ -82,6 +99,8 @@ class AuthRepository {
       if (profile == null) {
         throw const AuthException('User profile not found.');
       }
+      // If an older profile or a profile created on another device has no local
+      // public key, create/update it so secret chat setup can work.
       return _ensurePublicKey(profile);
     } on supabase.AuthException catch (e) {
       throw AuthException(mapAuthError(e.message), code: e.statusCode);
@@ -96,6 +115,7 @@ class AuthRepository {
     try {
       final uid = _client.auth.currentUser?.id;
       if (uid != null) {
+        // Store presence data before ending the Supabase session.
         await updateOnlineStatus(uid, false);
       }
       await _client.auth.signOut();
@@ -106,6 +126,7 @@ class AuthRepository {
 
   Future<UserModel?> getCurrentUserProfile() async {
     try {
+      // The current Supabase auth user id is the primary key in profiles.
       final uid = _client.auth.currentUser?.id;
       if (uid == null) return null;
 
@@ -119,6 +140,7 @@ class AuthRepository {
   }
 
   Future<void> updateOnlineStatus(String uid, bool isOnline) async {
+    // Other users can display this as an online dot or last-seen status.
     await _client.from('profiles').update({
       'is_online': isOnline,
       'last_seen': DateTime.now().toUtc().toIso8601String(),
@@ -126,6 +148,8 @@ class AuthRepository {
   }
 
   Future<UserModel> _ensurePublicKey(UserModel user) async {
+    // Secret chat invitation requires every participant to have a public key.
+    // If the stored profile key differs from this device's key, update Supabase.
     final publicKey = await _encryptionService.ensureIdentityKeyPair();
     if (user.publicKey == publicKey) return user;
     await _client

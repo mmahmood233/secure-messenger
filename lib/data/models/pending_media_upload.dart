@@ -1,3 +1,5 @@
+// Temporary UI model for a media upload that has started locally but has not
+// finished saving to Supabase yet.
 import 'dart:io';
 
 class PendingMediaUpload {

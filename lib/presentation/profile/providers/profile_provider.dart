@@ -1,3 +1,5 @@
+// Profile provider.
+// Handles profile updates and profile-photo uploads.
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:secure_messenger/core/errors/app_exception.dart';

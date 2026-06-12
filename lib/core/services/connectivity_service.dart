@@ -1,3 +1,5 @@
+// Connectivity service.
+// Watches the device network state so the UI can show an offline banner.
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
@@ -10,6 +12,7 @@ class ConnectivityService extends ChangeNotifier {
   bool get isOnline => _isOnline;
 
   ConnectivityService(this._connectivity) {
+    // Check once at startup, then keep listening for future network changes.
     _init();
   }
 

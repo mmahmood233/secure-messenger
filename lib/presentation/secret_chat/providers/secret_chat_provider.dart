@@ -1,3 +1,12 @@
+// Secret chat provider.
+//
+// This is the state manager for one open encrypted conversation. The screen
+// talks to this provider, and the provider coordinates:
+// - Preparing the secret chat key.
+// - Watching Supabase realtime message/typing streams.
+// - Decrypting messages before the UI sees them.
+// - Encrypting text/media before saving to Supabase.
+// - Updating read receipts and typing indicators.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -48,6 +57,9 @@ class SecretMessageProvider extends ChangeNotifier {
 
   Future<void> initChat(String chatId, String currentUid) async {
     try {
+      // Secret chats cannot show or send readable content until this device has
+      // the AES chat key. This may come from local secure storage, or it may be
+      // unwrapped from the encrypted_keys map stored in Supabase.
       await _prepareSecretChatKey(chatId, currentUid);
     } on AppException catch (e) {
       _errorMessage = e.message;
@@ -63,6 +75,7 @@ class SecretMessageProvider extends ChangeNotifier {
     _messagesSub?.cancel();
     _typingSub?.cancel();
 
+    // After the key is ready, start realtime streams and do an initial fetch.
     _subscribeToMessages(chatId, currentUid);
     _subscribeToTyping(chatId, currentUid);
 
@@ -77,6 +90,8 @@ class SecretMessageProvider extends ChangeNotifier {
     _messagesSub?.cancel();
     _messagesSub = _chatRepository.watchMessages(chatId).listen(
       (rawMessages) async {
+        // rawMessages still contain ciphertext. _applyRawMessages decrypts
+        // text messages and merges any local pending messages.
         await _applyRawMessages(rawMessages, chatId, currentUid);
       },
       onError: (e) {
@@ -90,6 +105,8 @@ class SecretMessageProvider extends ChangeNotifier {
     _typingSub?.cancel();
     _typingSub = _chatRepository.watchTyping(chatId).listen(
       (typing) {
+        // Remove the current user from the typing map because the UI should only
+        // show when the other participant is typing.
         _typingUsers = Map.from(typing)..remove(currentUid);
         notifyListeners();
       },
@@ -99,6 +116,7 @@ class SecretMessageProvider extends ChangeNotifier {
 
   Future<void> _refreshMessages(String chatId, String currentUid) async {
     try {
+      // Used at startup and as a fallback if the realtime stream has a problem.
       final messages = await _chatRepository.getMessages(chatId);
       await _applyRawMessages(messages, chatId, currentUid);
     } catch (_) {}
@@ -109,6 +127,8 @@ class SecretMessageProvider extends ChangeNotifier {
     String chatId,
     String currentUid,
   ) async {
+    // Convert database rows into UI-ready messages. The database content for
+    // secret text is encrypted, but the screen should receive plaintext.
     final decrypted = <MessageModel>[];
     for (final msg in rawMessages) {
       if (msg.isDeleted) {
@@ -117,6 +137,8 @@ class SecretMessageProvider extends ChangeNotifier {
       }
       if (msg.type == AppConstants.textMessage) {
         try {
+          // Supabase stores ciphertext; decrypt it locally before showing it.
+          // If the key is wrong or missing, AES-GCM authentication fails.
           final plain = await _encryptionService.decrypt(msg.content, chatId);
           decrypted.add(msg.copyWith(content: plain));
         } catch (_) {
@@ -127,6 +149,8 @@ class SecretMessageProvider extends ChangeNotifier {
       }
     }
     final remoteIds = rawMessages.map((message) => message.id).toSet();
+    // Once Supabase confirms a pending local message, remove the local pending
+    // copy to avoid showing duplicates.
     _pendingMessages.removeWhere((id, _) => remoteIds.contains(id));
     _pendingMediaUploads.removeWhere((upload) => remoteIds.contains(upload.id));
     _messages = [
@@ -146,6 +170,8 @@ class SecretMessageProvider extends ChangeNotifier {
 
   void _scheduleReconnect() {
     if (!_isListening || _reconnectTimer?.isActive == true) return;
+    // If realtime fails, retry once after a short delay and refresh from the
+    // database so the chat can recover without closing the screen.
     _reconnectTimer = Timer(const Duration(seconds: 2), () {
       final chatId = _activeChatId;
       final uid = _activeUid;
@@ -157,6 +183,8 @@ class SecretMessageProvider extends ChangeNotifier {
   }
 
   void stopListening(String chatId, String currentUid) {
+    // Called when leaving the screen. It stops streams, clears typing state, and
+    // does one last read sync for incoming messages.
     _isListening = false;
     _activeChatId = null;
     _activeUid = null;
@@ -178,6 +206,8 @@ class SecretMessageProvider extends ChangeNotifier {
   }) async {
     if (content.trim().isEmpty) return;
     final trimmed = content.trim();
+    // Keep plaintext only in local UI state so the sender immediately sees what
+    // they typed. The database receives encrypted content below.
     final message = MessageModel(
       id: _uuid.v4(),
       senderId: senderId,
@@ -191,6 +221,8 @@ class SecretMessageProvider extends ChangeNotifier {
     _isSending = true;
     notifyListeners();
     try {
+      // Encrypt before sending so the backend never sees the secret text.
+      // ChatRepository only receives ciphertext for this message.
       final encrypted = await _encryptionService.encrypt(trimmed, chatId);
       await _chatRepository.sendMessage(
         chatId: chatId,
@@ -216,6 +248,8 @@ class SecretMessageProvider extends ChangeNotifier {
     required File file,
     required String type,
   }) async {
+    // Secret media is encrypted locally first, then uploaded as encrypted bytes.
+    // The original file bytes are never uploaded to Supabase in secret chats.
     final upload = PendingMediaUpload(
       id: _uuid.v4(),
       file: file,
@@ -230,6 +264,8 @@ class SecretMessageProvider extends ChangeNotifier {
         await file.readAsBytes(),
         chatId,
       );
+      // Upload the encrypted payload. The saved storage object is opaque bytes,
+      // not a readable image/video/audio file.
       final encryptedUrl = await _chatRepository.uploadEncryptedMediaBytes(
         chatId: chatId,
         encryptedBytes: utf8.encode(encryptedPayload),
@@ -240,6 +276,8 @@ class SecretMessageProvider extends ChangeNotifier {
           : type == AppConstants.videoMessage
               ? 'Video'
               : 'Audio';
+      // Even the media label stored in messages.content is encrypted so the
+      // backend cannot read message previews for secret chats.
       final encrypted = await _encryptionService.encrypt(label, chatId);
       final sentMessage = await _chatRepository.sendMessage(
         chatId: chatId,
@@ -273,6 +311,8 @@ class SecretMessageProvider extends ChangeNotifier {
     required String newContent,
   }) async {
     try {
+      // Editing replaces the stored ciphertext with new ciphertext for the new
+      // plaintext message.
       final encrypted = await _encryptionService.encrypt(newContent, chatId);
       await _chatRepository.editMessage(
         chatId: chatId,
@@ -302,6 +342,8 @@ class SecretMessageProvider extends ChangeNotifier {
 
   void onTyping(String chatId, String uid, bool isTyping) {
     _typingTimer?.cancel();
+    // Typing state is not encrypted; it is only a small presence signal.
+    // The timer turns it off automatically if the user stops typing.
     if (_lastTypingState != isTyping) {
       _lastTypingState = isTyping;
       _chatRepository.setTyping(chatId, uid, isTyping).catchError((_) {});
@@ -319,6 +361,8 @@ class SecretMessageProvider extends ChangeNotifier {
     String currentUid,
     List<MessageModel> messages,
   ) {
+    // Read receipts are based on metadata, not message plaintext. Only incoming
+    // messages should be marked read by this user.
     final hasUnreadIncoming = messages.any(
       (message) =>
           message.senderId != currentUid &&
@@ -342,6 +386,8 @@ class SecretMessageProvider extends ChangeNotifier {
 
   void _syncReadState(String chatId, String currentUid) {
     if (_markingRead) return;
+    // Prevent overlapping read-receipt writes while realtime updates are coming
+    // in quickly.
     _markingRead = true;
     _chatRepository.markMessagesAsRead(chatId, currentUid).catchError((_) {
       return;
@@ -356,12 +402,17 @@ class SecretMessageProvider extends ChangeNotifier {
   }
 
   Future<void> _prepareSecretChatKey(String chatId, String currentUid) async {
+    // Step 1: try local secure storage. If the key is there, this device has
+    // already joined the secret chat and can decrypt immediately.
     _keysReady = await _encryptionService.hasKeysForChat(chatId);
     if (_keysReady) return;
 
     final chat = await _chatRepository.getChat(chatId);
     final encryptedForCurrentUser = chat.encryptedKeys[currentUid];
     if (encryptedForCurrentUser != null) {
+      // Step 2: the chat already has encrypted keys. Use the copy encrypted for
+      // this user, unwrap it with this device's RSA private key, then cache the
+      // raw AES chat key locally.
       final chatKey = await _encryptionService.decryptChatKeyForCurrentDevice(
         encryptedForCurrentUser,
       );
@@ -371,11 +422,15 @@ class SecretMessageProvider extends ChangeNotifier {
     }
 
     if (chat.encryptedKeys.isNotEmpty) {
+      // The chat has keys, but not for this user/device. Without a matching
+      // encrypted key, this device cannot decrypt the conversation.
       throw const EncryptionException(
         'This device does not have access to the secret chat key.',
       );
     }
 
+    // Step 3: no one has initialized keys yet. Create a new AES chat key, then
+    // wrap the same key once per participant using each public RSA key.
     final chatKey = await _encryptionService.generateAndStoreChatKey(chatId);
     final publicKeys = await _chatRepository.getParticipantPublicKeys(
       chat.participantIds,

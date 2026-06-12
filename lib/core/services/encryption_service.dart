@@ -1,3 +1,13 @@
+// Secret chat encryption service.
+//
+// This service contains the cryptography used by secret chats. The important
+// idea is:
+// - RSA-OAEP is used only to protect/share the chat key.
+// - AES-GCM is used to encrypt the actual messages and media.
+//
+// Supabase stores public keys, encrypted chat keys, encrypted messages, and
+// encrypted media. The raw private key and raw chat key stay on the phone in
+// secure storage.
 import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
@@ -13,6 +23,13 @@ class EncryptionService {
   EncryptionService(this._secureStorage);
 
   Future<String> ensureIdentityKeyPair() async {
+    // Each device has one long-term RSA identity key pair for secret chats.
+    //
+    // Public key: saved to Supabase profile so other users can encrypt a chat
+    // key for this user.
+    //
+    // Private key: saved only in secure storage so this device can decrypt chat
+    // keys that were encrypted for it.
     final existingPublic = await _secureStorage.read(
       key: AppConstants.identityPublicKey,
     );
@@ -23,6 +40,9 @@ class EncryptionService {
       return existingPublic;
     }
 
+    // RSA-OAEP is used later to wrap the symmetric chat key for each user. This
+    // is not used to encrypt every message because RSA is slow and only supports
+    // small payloads.
     final generator = RSAKeyGenerator()
       ..init(
         ParametersWithRandom(
@@ -63,12 +83,16 @@ class EncryptionService {
   }
 
   Future<String> generateAndStoreChatKey(String chatId) async {
+    // A secret chat uses one random symmetric key. AES-GCM uses a 32-byte key
+    // here, which is AES-256.
     final keyBase64 = _randomBase64(32);
     await storeChatKey(chatId, keyBase64);
     return keyBase64;
   }
 
   Future<void> storeChatKey(String chatId, String keyBase64) async {
+    // Chat keys are stored per chat id. If this device loses this key, it cannot
+    // read old secret messages unless the key is provided again.
     await _secureStorage.write(
       key: '${AppConstants.secretKeyPrefix}$chatId',
       value: keyBase64,
@@ -97,6 +121,8 @@ class EncryptionService {
     String publicKeyJson,
   ) async {
     try {
+      // Encrypt the AES chat key with one participant's public RSA key. The
+      // result is stored in chats.encrypted_keys[userId].
       final publicKey = _decodePublicKey(publicKeyJson);
       final cipher = OAEPEncoding(RSAEngine())
         ..init(true, PublicKeyParameter<RSAPublicKey>(publicKey));
@@ -108,6 +134,8 @@ class EncryptionService {
 
   Future<String> decryptChatKeyForCurrentDevice(String encryptedKey) async {
     try {
+      // This is the reverse of encryptChatKeyForUser. The encrypted chat key
+      // comes from Supabase, but only this device's private key can open it.
       final privateJson = await _secureStorage.read(
         key: AppConstants.identityPrivateKey,
       );
@@ -125,11 +153,14 @@ class EncryptionService {
   }
 
   Future<String> encrypt(String plainText, String chatId) async {
+    // Convenience method for secret text messages. It loads the chat key from
+    // secure storage and encrypts the string with AES-GCM.
     final keyBase64 = await _requiredChatKey(chatId);
     return encryptStringWithKey(plainText, keyBase64);
   }
 
   Future<String> decrypt(String encryptedText, String chatId) async {
+    // Convenience method for secret text messages received from Supabase.
     final keyBase64 = await _requiredChatKey(chatId);
     return decryptStringWithKey(encryptedText, keyBase64);
   }
@@ -163,6 +194,10 @@ class EncryptionService {
 
   String encryptBytesWithKey(Uint8List plainBytes, String keyBase64) {
     try {
+      // AES-GCM gives confidentiality and integrity. If ciphertext is changed,
+      // decryption fails instead of returning modified plaintext.
+      //
+      // A fresh nonce is required for every payload encrypted with the same key.
       final nonce = _randomBytes(12);
       final cipher = GCMBlockCipher(AESEngine())
         ..init(
@@ -175,6 +210,8 @@ class EncryptionService {
           ),
         );
       final cipherBytes = cipher.process(plainBytes);
+      // The version prefix lets the app change encryption formats later without
+      // breaking old messages.
       return 'v2:${base64Encode(nonce)}:${base64Encode(cipherBytes)}';
     } catch (e) {
       throw EncryptionException('Encryption failed: $e');
@@ -183,6 +220,8 @@ class EncryptionService {
 
   Uint8List decryptBytesWithKey(String encryptedPayload, String keyBase64) {
     try {
+      // Payload format: version, nonce, ciphertext plus authentication tag.
+      // For example: v2:<nonceBase64>:<ciphertextBase64>
       final parts = encryptedPayload.split(':');
       if (parts.length != 3 || parts.first != 'v2') {
         throw const EncryptionException(
@@ -216,6 +255,8 @@ class EncryptionService {
   }
 
   Future<String> _requiredChatKey(String chatId) async {
+    // Secret messages cannot be encrypted or decrypted without the chat key.
+    // Throwing here makes key problems visible to the provider/UI.
     final keyBase64 = await getChatKey(chatId);
     if (keyBase64 == null) {
       throw EncryptionException('Encryption key not found for chat $chatId');
@@ -224,12 +265,15 @@ class EncryptionService {
   }
 
   SecureRandom _secureRandom() {
+    // PointyCastle RSA generation needs a SecureRandom. It is seeded with bytes
+    // from Dart's Random.secure().
     final secureRandom = FortunaRandom();
     secureRandom.seed(KeyParameter(_randomBytes(32)));
     return secureRandom;
   }
 
   Uint8List _randomBytes(int length) {
+    // Used for AES keys, nonces, and RSA random seeding.
     final random = Random.secure();
     return Uint8List.fromList(
       List<int>.generate(length, (_) => random.nextInt(256)),

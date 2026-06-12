@@ -1,3 +1,4 @@
+// Simple reusable app logo widget.
 import 'package:flutter/material.dart';
 import 'package:secure_messenger/core/theme/app_theme.dart';
 

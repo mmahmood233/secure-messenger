@@ -1,3 +1,6 @@
+// Normal chat screen.
+// Displays a realtime conversation and supports text, media, typing indicators,
+// read receipts, edit, and delete.
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

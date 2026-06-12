@@ -1,3 +1,5 @@
+// Central app theme.
+// Defines colors, typography, buttons, cards, and the overall dark visual style.
 import 'package:flutter/material.dart';
 
 class AppTheme {

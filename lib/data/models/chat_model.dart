@@ -1,3 +1,9 @@
+// Data model for a chat row.
+//
+// A chat is the container around messages. It stores participant ids, chat-list
+// preview data, unread counters, typing state, and whether the chat is normal or
+// secret. Secret chats also use encryptedKeys to store the encrypted AES chat
+// key for each participant.
 class ChatModel {
   final String id;
   final List<String> participantIds;
@@ -24,6 +30,8 @@ class ChatModel {
   });
 
   factory ChatModel.fromMap(Map<String, dynamic> map, String id) {
+    // Accepts both Dart-style keys and Supabase snake_case keys. This makes the
+    // model easy to use with real Supabase rows and with simpler test maps.
     return ChatModel(
       id: id,
       participantIds: List<String>.from(
@@ -48,6 +56,8 @@ class ChatModel {
   }
 
   Map<String, dynamic> toMap() {
+    // Supabase columns use snake_case, so this map is ready to insert/update.
+    // typing starts with every participant set to false.
     return {
       'id': id,
       'participant_ids': participantIds,
@@ -64,6 +74,8 @@ class ChatModel {
   }
 
   String getOtherParticipantId(String currentUserId) {
+    // This app only supports one-on-one chats, so "the other participant" is the
+    // id that is not the current user.
     return participantIds.firstWhere(
       (id) => id != currentUserId,
       orElse: () => '',
@@ -104,6 +116,8 @@ class ChatModel {
   }
 
   static Map<String, int> _intMapFrom(dynamic value) {
+    // JSON values from Supabase may come back as num, so convert them to int for
+    // the Dart model.
     final map = Map<String, dynamic>.from(value as Map? ?? {});
     return map.map((key, value) => MapEntry(key, (value as num).toInt()));
   }

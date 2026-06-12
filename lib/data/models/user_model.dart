@@ -1,3 +1,7 @@
+// Data model for a user profile row.
+//
+// This is the app's public profile object. It is used for login state, profile
+// editing, contact lists, chat headers, QR codes, and secret-chat public keys.
 class UserModel {
   final String uid;
   final String email;
@@ -26,6 +30,8 @@ class UserModel {
   });
 
   factory UserModel.fromMap(Map<String, dynamic> map, String uid) {
+    // Handles both local Dart maps and Supabase profile rows by accepting
+    // camelCase and snake_case names.
     return UserModel(
       uid: uid,
       email: map['email'] ?? '',
@@ -47,6 +53,8 @@ class UserModel {
   }
 
   Map<String, dynamic> toMap() {
+    // Converts the profile to the Supabase profiles-table shape. The public key
+    // is safe to store in Supabase; the private key is never included here.
     return {
       'id': uid,
       'email': email,
@@ -91,6 +99,8 @@ class UserModel {
   }
 
   static DateTime? _parseDate(dynamic value) {
+    // Supabase returns date columns as strings, but tests/local objects may
+    // already pass DateTime values.
     if (value == null) return null;
     if (value is DateTime) return value;
     if (value is String) return DateTime.tryParse(value)?.toLocal();
